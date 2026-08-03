@@ -204,6 +204,19 @@
   .feed.live .feed-dot{background:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
   .feed.live{color:var(--green);border-color:rgba(95,221,170,.3)}
 
+  /* ---- the URL to paste into the OBS machine's Browser Source ---- */
+  .obsurl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
+    background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius);
+    padding:9px 13px}
+  .obsurl[hidden]{display:none}
+  .obsurl .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold);opacity:.85}
+  .obsurl code{font-family:var(--font-mono);font-size:12px;color:var(--white);
+    background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:5px 9px;
+    user-select:all}
+  .obsurl .hint{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--text3)}
+
   /* ---- OBS display view (?display=1) ---- */
   #lowerThirdDisplay{display:none}
   body.display-mode #lowerThirdDisplay{display:block;position:relative;width:1920px;height:1080px}
@@ -266,6 +279,12 @@
     <div><label>Relay</label>
       <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
     </div>
+  </div>
+  <div class="obsurl" id="obsUrl" hidden>
+    <span class="k">OBS Browser Source URL</span>
+    <code id="obsUrlText"></code>
+    <button id="obsUrlCopy" type="button">Copy</button>
+    <span class="hint" id="obsUrlHint">Paste into the Browser Source on the OBS computer · 1920×1080</span>
   </div>
   <div class="onair" id="onair" hidden>
     <span class="onair-dot"></span>
@@ -343,10 +362,19 @@ const useServer = params.get('src') === 'server';
 const ltChannel = 'BroadcastChannel' in window ? new BroadcastChannel('tb-lower-third') : null;
 if (isDisplayMode) document.body.classList.add('display-mode');
 
-// When the page itself is served over http(s) the relay is same-origin. Opened from file://
-// we still try localhost, because that's where the relay lives when you run it by hand.
-const RELAY = /^https?:$/.test(location.protocol) ? '' : 'http://localhost:8787';
+// Where the relay lives, in order of precedence:
+//   1. ?relay=192.168.1.50:8787 — an explicit host, for when the relay is running on the OTHER
+//      machine (e.g. you drive from a laptop but the server sits on the OBS box).
+//   2. same origin — the normal case, since both pages are served BY the relay.
+//   3. localhost:8787 — the page was opened straight off disk (file://), so guess the obvious.
+function resolveRelay() {
+  const p = params.get('relay');
+  if (p) return /^https?:\/\//.test(p) ? p.replace(/\/$/, '') : 'http://' + p.replace(/\/$/, '');
+  return /^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8787';
+}
+const RELAY = resolveRelay();
 const RELAY_POLL_MS = 400;
+const RELAY_PROBE_MS = 4000;   // control page only: keeps the Relay chip honest between pushes
 
 const logoURL = id => `https://www.mlbstatic.com/team-logos/${id}.svg`;
 const headshotURL = pid =>
@@ -908,6 +936,41 @@ function setFeed(live) {
   const chip = $('feedChip'); if (!chip) return;
   chip.classList.toggle('live', !!live);
   $('feedText').textContent = live ? 'Relay live' : 'Local only';
+  $('obsUrl').hidden = !live;
+  if (live && !obsUrlLoaded) loadObsUrl();
+}
+
+// Ask the relay what address the rest of the network sees it on, and build the URL to paste
+// into the OBS machine. Falls back to whatever host we're already talking to — that's still
+// right whenever the relay isn't on this laptop.
+let obsUrlLoaded = false;
+async function loadObsUrl() {
+  let base = RELAY;
+  try {
+    const info = await (await fetch(RELAY + '/info?t=' + Date.now(), { cache: 'no-store' })).json();
+    if (info && info.host) base = `http://${info.host}:${info.port || 8787}`;
+  } catch {}
+  const onThisMachine = /^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(base);
+  $('obsUrlText').textContent = `${base}/index.html?display=1&src=server`;
+  $('obsUrlHint').textContent = onThisMachine
+    ? 'Relay is local-only (started with --local) — OBS has to run on this machine'
+    : 'Paste into the Browser Source on the OBS computer · 1920×1080';
+  obsUrlLoaded = true;
+}
+
+// http://192.168.x.x isn't a secure context, so navigator.clipboard is often missing there —
+// the old execCommand path is the one that actually works on the studio network.
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((res, rej) => {
+    const ta = el('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy') ? res() : rej(new Error('copy blocked')); }
+    catch (e) { rej(e); }
+    finally { ta.remove(); }
+  });
 }
 
 function pushOnAir(pid, kind, row, data) {
@@ -1135,6 +1198,13 @@ $('openDisplay').onclick = () => {
   if ($('feedChip').classList.contains('live')) url.searchParams.set('src', 'server');
   window.open(url.href, '_blank');
 };
+$('obsUrlCopy').onclick = () => {
+  const btn = $('obsUrlCopy');
+  copyText($('obsUrlText').textContent)
+    .then(() => { btn.textContent = 'Copied ✓'; })
+    .catch(() => { btn.textContent = 'Select it'; })
+    .finally(() => setTimeout(() => { btn.textContent = 'Copy'; }, 1600));
+};
 $('onairClear').onclick = clearOnAir;
 $('modalExitOnAir').onclick = () => {
   clearOnAir();
@@ -1146,8 +1216,12 @@ if (isDisplayMode) {
   initDisplay();
 } else {
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
-  // one silent probe so the Relay chip is honest before the first player is pushed
-  fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' }).then(() => setFeed(true)).catch(() => setFeed(false));
+  // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone
+  // Ctrl+C's it — the chip needs to go grey before he clicks a player and wonders why OBS froze.
+  const probe = () => fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' })
+    .then(() => setFeed(true)).catch(() => setFeed(false));
+  probe();
+  setInterval(probe, RELAY_PROBE_MS);
   guard(async () => {
     say('Loading teams…');
     await Promise.all([loadTeams($('season').value), loadPlayerIndex($('season').value)]);

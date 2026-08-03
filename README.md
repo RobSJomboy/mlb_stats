@@ -69,11 +69,44 @@ python3 trade_snapshot_server.py
 - OBS **Browser Source**, 1920×1080, URL:
   `http://localhost:8787/index.html?display=1&src=server`
 
-The **Relay** chip in the header turns green when the server is answering. With it green, the
-**Open Display ↗** button hands the display view the `&src=server` route for you.
+The **Relay** chip in the header turns green when the server is answering, and re-checks every few
+seconds — if it goes grey mid-show, the relay died. With it green, **Open Display ↗** hands the
+display view the `&src=server` route for you.
 
-Python 3 only — no pip install, it's all standard library. Nothing is written to disk and the
-server binds to `127.0.0.1`, so it's not reachable from anywhere else on the network.
+Python 3 only, no pip install, all standard library. Nothing is written to disk.
+
+### Option C — OBS on a different computer
+
+Same as B. Run the relay on the laptop you're driving from; it listens on every interface, so the
+OBS machine can reach it over the network.
+
+The banner prints the URL to use, and the control page shows the same thing in a copyable
+**OBS Browser Source URL** field once the relay is live:
+
+```
+http://192.168.1.29:8787/index.html?display=1&src=server
+```
+
+Paste that into the Browser Source on the OBS computer, 1920×1080. Both machines have to be on the
+same network.
+
+If OBS shows nothing, in order of likelihood:
+
+1. **Firewall.** macOS will ask whether to allow incoming connections for Python the first time —
+   say yes. If you missed the prompt: System Settings → Network → Firewall → Options.
+2. **Different networks.** Guest wifi and client-isolated networks block machine-to-machine traffic
+   even when both have internet.
+3. **The IP moved.** DHCP hands out a new one after a reboot. Restart the relay and re-copy.
+
+Running the relay on the OBS box instead? Point the control page at it with `?relay=`:
+
+```
+http://localhost:8787/index.html?relay=192.168.1.50:8787
+```
+
+**One caveat worth knowing:** the relay is unauthenticated, so anyone on the same network who
+knows the address can read what's on air or push to it. On a studio or home network that's fine.
+On conference wifi, run it with `--local` and keep OBS on the same machine.
 
 ### Driving it during a show
 
@@ -115,3 +148,5 @@ Shared with the rest of the Talkin' Baseball tools:
 - **Stat responses are cached per URL for the session.** Clicking back to a timeframe you already
   looked at is instant; reload the page to force fresh numbers.
 - Older seasons work, but the roster shown is the current 40-man, not that year's.
+- **The overlay holds its last frame if the network drops.** A failed poll is ignored rather than
+  blanking the bar, so a brief wifi hiccup doesn't yank a graphic off air mid-sentence.
