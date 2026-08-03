@@ -1,4 +1,7 @@
 .DS_Store
+
+# this machine's relay key — never commit it
+.relay_key
 __pycache__/
 *.pyc
 

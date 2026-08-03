@@ -21,16 +21,48 @@ Stop it with Ctrl+C. Nothing is written to disk; state resets on restart.
 
 import json
 import os
+import secrets
 import socket
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 PORT = int(os.environ.get("PORT", 8787))
 ROOT = os.path.dirname(os.path.abspath(__file__))
+KEY_FILE = os.path.join(ROOT, ".relay_key")
 
 # The lower third that's currently on air. Replaced wholesale on every POST from
 # the control page; {"clear": True} takes the bar off screen.
 STATE = {"clear": True, "ts": 0}
+
+LOOPBACK = ("127.0.0.1", "::1")
+
+
+def load_key(rotate=False):
+    """The shared key, kept in .relay_key so it survives restarts.
+
+    Stable on purpose: a key that changed every launch would mean re-pasting the
+    Browser Source URL in OBS before every show, which is exactly the friction
+    this is supposed to avoid. --new-key rotates it if it ever leaks.
+    """
+    if not rotate and os.path.exists(KEY_FILE):
+        try:
+            existing = open(KEY_FILE).read().strip()
+            if existing:
+                return existing
+        except OSError:
+            pass
+    key = secrets.token_urlsafe(8)
+    with open(KEY_FILE, "w") as f:
+        f.write(key)
+    try:
+        os.chmod(KEY_FILE, 0o600)
+    except OSError:
+        pass
+    return key
+
+
+KEY = load_key("--new-key" in sys.argv)
 
 
 def lan_ip():
@@ -73,19 +105,42 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # ── access ──
+    def _is_local(self):
+        return self.client_address[0] in LOOPBACK
+
+    def _authorized(self):
+        """Loopback is trusted; everyone else needs the key.
+
+        That split is the whole point: the control page runs on this machine, so
+        it never has to know the key, and the only URL anyone has to carry around
+        is the one for the OBS box — which the banner hands them fully built.
+        """
+        if self._is_local():
+            return True
+        given = (parse_qs(urlparse(self.path).query).get("key") or [None])[0] \
+            or self.headers.get("X-Relay-Key")
+        return bool(given) and secrets.compare_digest(given, KEY)
+
     # ── routes ──
     def do_OPTIONS(self):
         self.send_response(204)
         self.end_headers()
 
     def do_GET(self):
+        if not self._authorized():
+            return self._json({"error": "bad or missing key"}, 403)
         path = self.path.split("?")[0]
         if path == "/state":
             return self._json(STATE)
         if path == "/info":
             # lets the control page show the OBS-machine URL without anyone
-            # having to go hunting through Network settings for an IP
-            return self._json({"host": lan_ip(), "port": PORT})
+            # having to go hunting through Network settings for an IP. The key
+            # only goes to loopback — handing it to the network would defeat it.
+            info = {"host": lan_ip(), "port": PORT}
+            if self._is_local():
+                info["key"] = KEY
+            return self._json(info)
         if path == "/":
             self.path = "/index.html"
         return super().do_GET()
@@ -97,6 +152,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         global STATE
+        if not self._authorized():
+            return self._json({"error": "bad or missing key"}, 403)
         if self.path.split("?")[0] != "/state":
             return self._json({"error": "not found"}, 404)
         length = int(self.headers.get("Content-Length") or 0)
@@ -131,7 +188,11 @@ def main():
         print("      http://localhost:%d/index.html?display=1&src=server" % PORT)
     else:
         print("  OBS Browser Source, 1920x1080 — paste this on the OBS computer:")
-        print("      http://%s:%d/index.html?display=1&src=server" % (host, PORT))
+        print("      http://%s:%d/index.html?display=1&src=server&key=%s" % (host, PORT, KEY))
+        print()
+        print("  The key is already in that URL — nothing to type. It stays the same")
+        print("  across restarts, so OBS keeps working once it's set up.")
+        print("  (--new-key rotates it, --local turns the network off entirely.)")
         print()
         print("  Both machines have to be on the same network. If OBS can't reach it,")
         print("  it's almost always the firewall on this laptop blocking Python.")

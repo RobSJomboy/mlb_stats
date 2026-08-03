@@ -376,6 +376,18 @@ const RELAY = resolveRelay();
 const RELAY_POLL_MS = 400;
 const RELAY_PROBE_MS = 4000;   // control page only: keeps the Relay chip honest between pushes
 
+// The relay only asks for a key when the request comes from another machine — loopback is
+// trusted. So the control page running on the same laptop never carries one, and the only URL
+// with a key in it is the OBS Browser Source one, which the app hands you fully built.
+const RELAY_KEY = params.get('key') || '';
+const relayURL = (path, extra) => {
+  const u = new URL(RELAY + path);
+  u.searchParams.set('t', Date.now());
+  if (RELAY_KEY) u.searchParams.set('key', RELAY_KEY);
+  if (extra) Object.entries(extra).forEach(([k, v]) => u.searchParams.set(k, v));
+  return u.href;
+};
+
 const logoURL = id => `https://www.mlbstatic.com/team-logos/${id}.svg`;
 const headshotURL = pid =>
   `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png,q_auto:best,f_auto/v1/people/${pid}/headshot/67/current`;
@@ -926,10 +938,10 @@ let onAirPid = null, onAirKind = null;
 
 function relayPost(payload) {
   // fire-and-forget: the relay is optional, so a failure here is just "no server running"
-  fetch(RELAY + '/state', {
+  fetch(relayURL('/state'), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload || { clear: true, ts: Date.now() }),
-  }).then(() => setFeed(true)).catch(() => setFeed(false));
+  }).then(r => setFeed(r.ok)).catch(() => setFeed(false));
 }
 
 function setFeed(live) {
@@ -937,25 +949,33 @@ function setFeed(live) {
   chip.classList.toggle('live', !!live);
   $('feedText').textContent = live ? 'Relay live' : 'Local only';
   $('obsUrl').hidden = !live;
-  if (live && !obsUrlLoaded) loadObsUrl();
+  if (live) loadObsUrl();
 }
 
 // Ask the relay what address the rest of the network sees it on, and build the URL to paste
 // into the OBS machine. Falls back to whatever host we're already talking to — that's still
 // right whenever the relay isn't on this laptop.
-let obsUrlLoaded = false;
+//
+// Re-checked on every probe rather than cached once: --new-key and a DHCP reshuffle both change
+// this URL out from under a page that's already open, and a stale one here means he copies
+// something that 403s in OBS. The DOM only gets touched when the text actually changes.
+let lastObsUrl = null;
 async function loadObsUrl() {
-  let base = RELAY;
+  let base = RELAY, key = RELAY_KEY;
   try {
-    const info = await (await fetch(RELAY + '/info?t=' + Date.now(), { cache: 'no-store' })).json();
+    const info = await (await fetch(relayURL('/info'), { cache: 'no-store' })).json();
     if (info && info.host) base = `http://${info.host}:${info.port || 8787}`;
+    if (info && info.key) key = info.key;   // only ever handed to loopback
   } catch {}
+  const url = `${base}/index.html?display=1&src=server`
+    + (key ? `&key=${encodeURIComponent(key)}` : '');
+  if (url === lastObsUrl) return;
+  lastObsUrl = url;
   const onThisMachine = /^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(base);
-  $('obsUrlText').textContent = `${base}/index.html?display=1&src=server`;
+  $('obsUrlText').textContent = url;
   $('obsUrlHint').textContent = onThisMachine
     ? 'Relay is local-only (started with --local) — OBS has to run on this machine'
     : 'Paste into the Browser Source on the OBS computer · 1920×1080';
-  obsUrlLoaded = true;
 }
 
 // http://192.168.x.x isn't a secure context, so navigator.clipboard is often missing there —
@@ -1082,7 +1102,7 @@ function initDisplay() {
     let lastTs = null;
     const tick = async () => {
       try {
-        const s = await (await fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' })).json();
+        const s = await (await fetch(relayURL('/state'), { cache: 'no-store' })).json();
         const ts = s && s.ts != null ? s.ts : null;
         if (ts !== lastTs) {
           lastTs = ts;
@@ -1218,8 +1238,8 @@ if (isDisplayMode) {
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
   // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone
   // Ctrl+C's it — the chip needs to go grey before he clicks a player and wonders why OBS froze.
-  const probe = () => fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' })
-    .then(() => setFeed(true)).catch(() => setFeed(false));
+  const probe = () => fetch(relayURL('/state'), { cache: 'no-store' })
+    .then(r => setFeed(r.ok)).catch(() => setFeed(false));
   probe();
   setInterval(probe, RELAY_PROBE_MS);
   guard(async () => {

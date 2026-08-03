@@ -84,11 +84,22 @@ The banner prints the URL to use, and the control page shows the same thing in a
 **OBS Browser Source URL** field once the relay is live:
 
 ```
-http://192.168.1.29:8787/index.html?display=1&src=server
+http://192.168.1.29:8787/index.html?display=1&src=server&key=xKP8OCplbCY
 ```
 
 Paste that into the Browser Source on the OBS computer, 1920×1080. Both machines have to be on the
-same network.
+same network. That's the whole setup — you never type the key, it's already in the URL.
+
+**About that key.** Anything coming from another machine has to present it; anything from this
+machine doesn't. So the control page you're driving from needs no key at all, and the one URL that
+carries one is the OBS URL, handed to you fully built.
+
+It's generated on first run, stored in `.relay_key` next to the script (mode 600, gitignored), and
+**stays the same across restarts** — otherwise you'd be re-pasting into OBS before every show. Set
+the Browser Source up once and forget it.
+
+- `--new-key` rotates it, if it ever ends up somewhere it shouldn't. Re-copy the URL into OBS after.
+- `--local` skips the network entirely; OBS then has to run on this machine.
 
 If OBS shows nothing, in order of likelihood:
 
@@ -96,17 +107,19 @@ If OBS shows nothing, in order of likelihood:
    say yes. If you missed the prompt: System Settings → Network → Firewall → Options.
 2. **Different networks.** Guest wifi and client-isolated networks block machine-to-machine traffic
    even when both have internet.
-3. **The IP moved.** DHCP hands out a new one after a reboot. Restart the relay and re-copy.
+3. **The IP moved.** DHCP hands out a new one after a reboot. The control page picks the new one up
+   on its own — just re-copy the URL into OBS.
+4. **Stale key in OBS**, if you've run `--new-key` since setting it up. Re-copy.
 
-Running the relay on the OBS box instead? Point the control page at it with `?relay=`:
+Running the relay on the OBS box instead? Point the control page at it with `?relay=` and the key:
 
 ```
-http://localhost:8787/index.html?relay=192.168.1.50:8787
+http://localhost:8787/index.html?relay=192.168.1.50:8787&key=xKP8OCplbCY
 ```
 
-**One caveat worth knowing:** the relay is unauthenticated, so anyone on the same network who
-knows the address can read what's on air or push to it. On a studio or home network that's fine.
-On conference wifi, run it with `--local` and keep OBS on the same machine.
+**Worth knowing:** the key keeps out anyone who wanders onto the same network, but this is plain
+HTTP — someone already capturing traffic on that network could read it. It's guarding which
+baseball stats are on screen, so that's the right trade. Don't reuse the key for anything else.
 
 ### Driving it during a show
 
