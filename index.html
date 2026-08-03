@@ -204,6 +204,23 @@
   .feed.live .feed-dot{background:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
   .feed.live{color:var(--green);border-color:rgba(95,221,170,.3)}
 
+  /* ---- connection: topic-based sync, same shape as the Trade Deadline control ---- */
+  .connect{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;
+    background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius);
+    padding:11px 14px}
+  .connect .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--gold);opacity:.85}
+  .connect input{min-width:260px;font-family:var(--font-mono);font-size:13px}
+  .connect-btn{background:var(--gold);color:var(--navy-dark);border:1px solid var(--gold);
+    font-family:var(--font-display);font-size:16px;letter-spacing:.06em;padding:7px 18px}
+  .connect-btn:hover{background:#ffdc9b;border-color:#ffdc9b;color:var(--navy-dark)}
+  .conn-pill{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+    border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--text3)}
+  .conn-pill.ok{color:var(--green);border-color:rgba(95,221,170,.35);background:var(--green-dim)}
+  .connect .hint{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--text3);flex-basis:100%}
+  .connect .hint.warn{color:var(--red)}
+
   /* ---- the URL to paste into the OBS machine's Browser Source ---- */
   .obsurl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
     background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius);
@@ -279,6 +296,14 @@
     <div><label>Relay</label>
       <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
     </div>
+  </div>
+  <div class="connect" id="connectRow">
+    <span class="k">Connection</span>
+    <input id="topicInput" type="text" placeholder="topic name" autocomplete="off" spellcheck="false">
+    <button id="connectBtn" class="connect-btn" type="button">Connect</button>
+    <span class="conn-pill" id="connStatus">not connected</span>
+    <button id="copyDisplayBtn" type="button" disabled>Copy Display URL</button>
+    <span class="hint" id="connHint"></span>
   </div>
   <div class="obsurl" id="obsUrl" hidden>
     <span class="k">OBS Browser Source URL</span>
@@ -380,6 +405,15 @@ const RELAY_PROBE_MS = 4000;   // control page only: keeps the Relay chip honest
 // trusted. So the control page running on the same laptop never carries one, and the only URL
 // with a key in it is the OBS Browser Source one, which the app hands you fully built.
 const RELAY_KEY = params.get('key') || '';
+
+// ---- topic sync (ntfy.sh) --------------------------------------------------------------
+// The way the Trade Deadline control connects: both pages subscribe to a named topic on
+// ntfy.sh, so the control laptop and the OBS machine don't have to be on the same network —
+// or even in the same building. No server to run. Needs both pages served from a real host
+// (GitHub Pages), since the OBS machine can't open a file:// path off your laptop.
+const NTFY = 'https://ntfy.sh';
+const TOPIC_KEY = 'tb-snapshot-topic';
+let TOPIC = params.get('topic') || '';
 const relayURL = (path, extra) => {
   const u = new URL(RELAY + path);
   u.searchParams.set('t', Date.now());
@@ -944,12 +978,32 @@ function relayPost(payload) {
   }).then(r => setFeed(r.ok)).catch(() => setFeed(false));
 }
 
+// Fire-and-forget, same as the relay: if the topic is unreachable the show carries on and the
+// pill goes back to grey on the next publish rather than blocking on a dead network.
+function publishTopic(payload) {
+  if (!TOPIC) return;
+  fetch(`${NTFY}/${encodeURIComponent(TOPIC)}`, {
+    method: 'POST',
+    body: JSON.stringify(payload || { clear: true, ts: Date.now() }),
+  }).then(r => setConn(r.ok)).catch(() => setConn(false));
+}
+
+function setConn(ok) {
+  const pill = $('connStatus'); if (!pill) return;
+  pill.classList.toggle('ok', !!ok);
+  pill.textContent = ok ? 'connected' : (TOPIC ? 'not reaching topic' : 'not connected');
+  $('copyDisplayBtn').disabled = !TOPIC;
+  // the LAN-relay panel is the fallback for when there's no internet — no point showing two
+  // competing "copy this URL" affordances once a topic is live
+  if (TOPIC && ok) $('obsUrl').hidden = true;
+}
+
 function setFeed(live) {
   const chip = $('feedChip'); if (!chip) return;
   chip.classList.toggle('live', !!live);
   $('feedText').textContent = live ? 'Relay live' : 'Local only';
-  $('obsUrl').hidden = !live;
-  if (live) loadObsUrl();
+  $('obsUrl').hidden = !live || !!TOPIC;
+  if (live && !TOPIC) loadObsUrl();
 }
 
 // Ask the relay what address the rest of the network sees it on, and build the URL to paste
@@ -999,6 +1053,7 @@ function pushOnAir(pid, kind, row, data) {
   const payload = { pid, kind, name: row.name, pos: row.pos, team: row.team, data, ts: Date.now() };
   try { localStorage.setItem(LT_KEY, JSON.stringify(payload)); } catch {}
   if (ltChannel) ltChannel.postMessage(payload);
+  publishTopic(payload);
   relayPost(payload);
   updateOnAirUI(payload);
 }
@@ -1007,6 +1062,7 @@ function clearOnAir() {
   onAirPid = onAirKind = null;
   try { localStorage.removeItem(LT_KEY); } catch {}
   if (ltChannel) ltChannel.postMessage({ clear: true });
+  publishTopic(null);
   relayPost(null);
   updateOnAirUI(null);
 }
@@ -1095,7 +1151,59 @@ function sizeCells(n) {
   });
 }
 
+/* ---- display side: subscribe to the topic (SSE + watchdog + polling safety net) ----------
+   Same belt-and-braces shape the Trade Deadline display uses, and for the same reason: plain
+   SSE is near-instant, but corporate proxies, VPNs and antivirus HTTPS scanning all like to
+   buffer long-lived streams and flush them every ~30s. A discrete poll isn't subject to that,
+   so it runs alongside as a safety net, and a watchdog force-reconnects a stream that's gone
+   quiet in a way the browser hasn't noticed. */
+function initTopicDisplay() {
+  let es = null, lastMsgAt = Date.now(), sincePoll = Math.floor(Date.now() / 1000);
+
+  const apply = envelope => {
+    lastMsgAt = Date.now();
+    if (!envelope || !envelope.message) return;
+    try {
+      const s = JSON.parse(envelope.message);
+      renderOnAirBar(s && !s.clear && s.pid ? s : null);
+    } catch { /* ignore malformed payload */ }
+  };
+
+  const connect = () => {
+    if (es) es.close();
+    es = new EventSource(`${NTFY}/${encodeURIComponent(TOPIC)}/sse`);
+    es.onmessage = ev => { try { apply(JSON.parse(ev.data)); } catch { /* non-JSON ping */ } };
+    es.onerror = () => { /* browser auto-retries; the watchdog covers silent stalls too */ };
+  };
+  connect();
+
+  // ntfy keepalives land at least every ~45s even with no traffic, so 20s of total silence
+  // means the stream is dead in a way the browser hasn't reported yet.
+  setInterval(() => {
+    if (Date.now() - lastMsgAt > 20000) { connect(); lastMsgAt = Date.now(); }
+  }, 5000);
+
+  const pollOnce = async (since) => {
+    const from = since != null ? since : sincePoll;
+    if (since == null) sincePoll = Math.floor(Date.now() / 1000);
+    try {
+      const res = await fetch(`${NTFY}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
+      const text = await res.text();
+      text.split('\n').filter(Boolean).forEach(line => {
+        try { apply(JSON.parse(line)); } catch { /* ignore malformed line */ }
+      });
+    } catch { /* network hiccup; the next interval retries */ }
+  };
+  setInterval(() => pollOnce(), 4000);
+
+  // Backfill on load: SSE only carries what's published from now on, so a Browser Source that
+  // OBS just refreshed mid-show would sit blank until the next click. Replaying the last few
+  // minutes brings the current graphic straight back up.
+  pollOnce('10m');
+}
+
 function initDisplay() {
+  if (TOPIC) return initTopicDisplay();
   if (useServer) {
     // OBS Browser Source path: poll the relay. Only repaint when the timestamp actually moves,
     // so a 2.5-per-second poll doesn't restart the fade on every tick.
@@ -1218,6 +1326,48 @@ $('openDisplay').onclick = () => {
   if ($('feedChip').classList.contains('live')) url.searchParams.set('src', 'server');
   window.open(url.href, '_blank');
 };
+// The display URL has to be openable from the OBS machine, which rules out file:// — that path
+// only exists on this laptop. Say so up front rather than letting him paste a dead link into OBS.
+const servedFromHost = /^https?:$/.test(location.protocol);
+function displayURL() {
+  return `${location.href.split(/[?#]/)[0]}?display=1&topic=${encodeURIComponent(TOPIC)}`;
+}
+
+function connectTopic() {
+  const t = $('topicInput').value.trim();
+  if (!t) { $('connHint').textContent = 'Enter a topic name first.'; $('connHint').className = 'hint warn'; return; }
+  TOPIC = t;
+  try { localStorage.setItem(TOPIC_KEY, TOPIC); } catch {}
+  setConn(true);           // provisional; the publish below corrects it if the topic is unreachable
+  // Republish whatever is already on air, so connecting mid-show brings the display straight
+  // up instead of leaving it blank until the next click.
+  let current = null;
+  try { current = JSON.parse(localStorage.getItem(LT_KEY) || 'null'); } catch {}
+  publishTopic(current);
+  updateConnHint();
+}
+
+function updateConnHint() {
+  const hint = $('connHint');
+  if (!TOPIC) { hint.textContent = 'Pick any topic name — both computers connect to the same one.'; hint.className = 'hint'; return; }
+  if (!servedFromHost) {
+    hint.textContent = 'Opened from a file — the OBS computer can\'t load this URL. Serve it from GitHub Pages first.';
+    hint.className = 'hint warn';
+    return;
+  }
+  hint.textContent = 'Copy the display URL into the Browser Source on the OBS computer · 1920×1080';
+  hint.className = 'hint';
+}
+
+$('connectBtn').onclick = connectTopic;
+$('topicInput').onkeydown = e => { if (e.key === 'Enter') connectTopic(); };
+$('copyDisplayBtn').onclick = () => {
+  const btn = $('copyDisplayBtn'), url = displayURL();
+  copyText(url)
+    .then(() => { btn.textContent = 'Copied ✓'; })
+    .catch(() => { prompt('Copy this URL:', url); })
+    .finally(() => setTimeout(() => { btn.textContent = 'Copy Display URL'; }, 1600));
+};
 $('obsUrlCopy').onclick = () => {
   const btn = $('obsUrlCopy');
   copyText($('obsUrlText').textContent)
@@ -1236,6 +1386,16 @@ if (isDisplayMode) {
   initDisplay();
 } else {
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
+
+  // Reconnect to last show's topic automatically; first run gets a suggested one so the only
+  // step is clicking Connect. The random tail matters — an ntfy topic is public to anyone who
+  // knows its name, so a guessable one is a stranger's write access to your lower third.
+  let saved = '';
+  try { saved = localStorage.getItem(TOPIC_KEY) || ''; } catch {}
+  $('topicInput').value = saved || `tb-snapshot-${Math.random().toString(36).slice(2, 8)}`;
+  if (saved) { TOPIC = saved; setConn(true); publishTopic(null); }
+  else setConn(false);
+  updateConnHint();
   // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone
   // Ctrl+C's it — the chip needs to go grey before he clicks a player and wonders why OBS froze.
   const probe = () => fetch(relayURL('/state'), { cache: 'no-store' })

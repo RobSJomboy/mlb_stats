@@ -13,7 +13,8 @@ StatsAPI at page load, so the numbers are whatever the league is showing right n
 
 **Just looking things up?** Double-click `index.html`. That's the whole install.
 
-**Putting it on screen?** See the OBS section below.
+**Putting it on screen?** See the OBS section below. For the two-computer setup, the page needs to
+be served from GitHub Pages rather than opened off disk — Settings → Pages → Branch `main` / root.
 
 ---
 
@@ -57,69 +58,82 @@ Two ways in, depending on how much setup you want.
 
 Works because both tabs are the same browser and talk over BroadcastChannel.
 
-### Option B — Browser Source (cleaner, real transparency)
+### Option B — Connect a topic (works across computers, no server)
 
-An OBS Browser Source is its own browser, so it can't hear the control tab directly. Run the relay:
+Same as the Trade Deadline control. Both pages subscribe to a named topic on
+[ntfy.sh](https://ntfy.sh), so the two machines don't have to be on the same network — or in the
+same building. Nothing to install.
+
+1. In **Connection**, take the suggested topic (or type your own) and hit **Connect**. The pill
+   goes green.
+2. Hit **Copy Display URL**.
+3. On the OBS computer, paste that into a **Browser Source**, 1920×1080.
+
+That's it. The topic is remembered, so next show you just open the page and it reconnects itself.
+
+```
+https://robsjomboy.github.io/mlb_stats/index.html?display=1&topic=tb-snapshot-2kb024
+```
+
+**This needs the page on a real host** — GitHub Pages. The OBS machine can't open a `file://` path
+off your laptop, and the control page will warn you if you're running it that way.
+
+Sync is SSE with a polling safety net and a reconnect watchdog, same belt-and-braces as the
+Deadline display: some networks silently buffer streaming connections, and a plain poll isn't
+subject to that. If OBS refreshes the Browser Source mid-show, the display replays the last few
+minutes on load, so the current graphic comes straight back up instead of sitting blank.
+
+**Topics are public to anyone who knows the name.** That's why the suggested one has a random tail
+— a guessable topic is a stranger's write access to your lower third. Don't shorten it to something
+tidy like `talkinbaseball`.
+
+### Option C — Local relay (no internet)
+
+Only worth it if you can't rely on the internet, since the app needs it for stats anyway. Runs on
+your network instead of through ntfy:
 
 ```bash
 python3 trade_snapshot_server.py
 ```
 
 - Control page: `http://localhost:8787/index.html`
-- OBS **Browser Source**, 1920×1080, URL:
-  `http://localhost:8787/index.html?display=1&src=server`
+- The header shows a copyable **OBS Browser Source URL** with the key already in it:
+  `http://192.168.1.29:8787/index.html?display=1&src=server&key=xKP8OCplbCY`
 
-The **Relay** chip in the header turns green when the server is answering, and re-checks every few
-seconds — if it goes grey mid-show, the relay died. With it green, **Open Display ↗** hands the
-display view the `&src=server` route for you.
+Both machines have to be on the same network. The panel only appears when no topic is connected.
 
-Python 3 only, no pip install, all standard library. Nothing is written to disk.
+**About that key.** Anything from another machine has to present it; anything from this machine
+doesn't. So the control page needs no key, and the one URL that carries one is the OBS URL, handed
+to you fully built. It's generated on first run, kept in `.relay_key` (mode 600, gitignored), and
+stays the same across restarts so you set the Browser Source up once.
 
-### Option C — OBS on a different computer
-
-Same as B. Run the relay on the laptop you're driving from; it listens on every interface, so the
-OBS machine can reach it over the network.
-
-The banner prints the URL to use, and the control page shows the same thing in a copyable
-**OBS Browser Source URL** field once the relay is live:
-
-```
-http://192.168.1.29:8787/index.html?display=1&src=server&key=xKP8OCplbCY
-```
-
-Paste that into the Browser Source on the OBS computer, 1920×1080. Both machines have to be on the
-same network. That's the whole setup — you never type the key, it's already in the URL.
-
-**About that key.** Anything coming from another machine has to present it; anything from this
-machine doesn't. So the control page you're driving from needs no key at all, and the one URL that
-carries one is the OBS URL, handed to you fully built.
-
-It's generated on first run, stored in `.relay_key` next to the script (mode 600, gitignored), and
-**stays the same across restarts** — otherwise you'd be re-pasting into OBS before every show. Set
-the Browser Source up once and forget it.
-
-- `--new-key` rotates it, if it ever ends up somewhere it shouldn't. Re-copy the URL into OBS after.
+- `--new-key` rotates it. Re-copy the URL into OBS after.
 - `--local` skips the network entirely; OBS then has to run on this machine.
 
-If OBS shows nothing, in order of likelihood:
+### If OBS shows nothing
 
-1. **Firewall.** macOS will ask whether to allow incoming connections for Python the first time —
-   say yes. If you missed the prompt: System Settings → Network → Firewall → Options.
+**On a topic (Option B):**
+
+1. **Topic mismatch.** The control pill says connected but the display URL has an older topic in
+   it — re-copy it.
+2. **`file://`.** The OBS machine can't open a path on your laptop. Host it on Pages.
+3. **Blocked network.** Some corporate networks block ntfy.sh outright. Fall back to Option C.
+
+**On the local relay (Option C):**
+
+1. **Firewall.** macOS asks whether to allow incoming connections for Python the first time — say
+   yes. If you missed it: System Settings → Network → Firewall → Options.
 2. **Different networks.** Guest wifi and client-isolated networks block machine-to-machine traffic
    even when both have internet.
-3. **The IP moved.** DHCP hands out a new one after a reboot. The control page picks the new one up
-   on its own — just re-copy the URL into OBS.
-4. **Stale key in OBS**, if you've run `--new-key` since setting it up. Re-copy.
+3. **The IP moved.** DHCP hands out a new one after a reboot. The control page picks it up on its
+   own — just re-copy.
+4. **Stale key**, if you've run `--new-key` since. Re-copy.
 
-Running the relay on the OBS box instead? Point the control page at it with `?relay=` and the key:
+Running the relay on the OBS box instead? Point the control page at it:
 
 ```
 http://localhost:8787/index.html?relay=192.168.1.50:8787&key=xKP8OCplbCY
 ```
-
-**Worth knowing:** the key keeps out anyone who wanders onto the same network, but this is plain
-HTTP — someone already capturing traffic on that network could read it. It's guarding which
-baseball stats are on screen, so that's the right trade. Don't reuse the key for anything else.
 
 ### Driving it during a show
 
