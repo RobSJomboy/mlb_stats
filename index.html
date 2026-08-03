@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trade Snapshot — Talkin' Baseball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1f2d;
+    --navy:#173a56;
+    --navy-light:#1f4d70;
+    --navy-dark:#0d2233;
+    --surface:#173a56;
+    --surface2:#1f4d70;
+    --surface3:#0d2233;
+    --border:rgba(255,255,255,0.1);
+    --border2:rgba(255,255,255,0.2);
+    --gold:#fbcc7a;
+    --gold-dim:rgba(251,204,122,0.12);
+    --gold-dim2:rgba(251,204,122,0.07);
+    --red:#ff6b6b;
+    --red-dim:rgba(255,107,107,0.15);
+    --green:#5fddaa;
+    --green-dim:rgba(95,221,170,0.12);
+    --white:#ffffff;
+    --text:#ffffff;
+    --text2:rgba(255,255,255,0.55);
+    --text3:rgba(255,255,255,0.28);
+    --font-display:'Bebas Neue',sans-serif;
+    --font-body:'DM Sans',sans-serif;
+    --font-mono:'DM Mono',monospace;
+    --radius:6px;
+    --radius-lg:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased}
+
+  /* ---- header ---- */
+  header{padding:16px 22px 14px;border-bottom:1px solid var(--border);background:var(--navy-dark);
+    position:sticky;top:0;z-index:40}
+  .eyebrow{font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;color:var(--gold);
+    text-transform:uppercase;margin:0 0 8px;opacity:.85}
+  .titlerow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-family:var(--font-display);font-weight:400;font-size:40px;line-height:1;margin:0;
+    letter-spacing:.03em;color:var(--white)}
+  h1 span{color:var(--gold)}
+  .home-btn{background:none;color:var(--gold);border:1px solid rgba(251,204,122,.35);border-radius:20px;
+    padding:6px 15px;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;cursor:pointer;flex:none;transition:all .15s}
+  .home-btn:hover{background:var(--gold);border-color:var(--gold);color:var(--navy-dark)}
+  .teambadge{display:flex;align-items:center;gap:9px}
+  .teambadge img{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.92);padding:3px;
+    object-fit:contain}
+  .teambadge .tn{font-family:var(--font-display);font-size:17px;letter-spacing:.06em;
+    color:var(--text2);line-height:1}
+  .datanote{position:absolute;top:16px;right:22px;font-family:var(--font-mono);font-size:9px;
+    letter-spacing:.14em;color:var(--text3);background:var(--gold-dim2);
+    border:1px solid var(--border);border-radius:20px;padding:5px 12px;text-transform:uppercase}
+  .datanote b{color:var(--gold);font-weight:400}
+
+  .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:14px}
+  label{display:block;font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--gold);margin-bottom:5px;opacity:.85}
+  select,input{background:var(--surface);color:var(--text);border:1px solid var(--border);
+    border-radius:var(--radius);padding:8px 10px;font-family:var(--font-body);font-size:14px;
+    max-width:min(60vw,520px)}
+  select:focus,input:focus{outline:none;border-color:var(--gold)}
+  input::placeholder{color:var(--text3)}
+  select option{background:var(--navy-dark);color:var(--text)}
+
+  #status{padding:16px 22px;color:var(--text2);font-size:13px}
+  #status.err{color:var(--red)}
+  #status:empty{display:none}
+  main{padding:0 22px 60px}
+  h2{font-family:var(--font-display);font-weight:400;font-size:26px;margin:28px 0 10px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--white)}
+
+  /* ---- tables ---- */
+  .wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-lg);
+    background:var(--surface3)}
+  table{border-collapse:separate;border-spacing:0;font-size:14px;width:100%}
+  th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--border)}
+  thead th{position:sticky;top:0;background:var(--navy-dark);z-index:10;
+    font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold);border-bottom:1px solid var(--border2)}
+  thead th[data-key]{cursor:pointer;user-select:none;transition:color .15s}
+  thead th[data-key]:hover{color:var(--white)}
+  thead th[data-key].sort-asc,thead th[data-key].sort-desc{color:var(--white)}
+  thead th[data-key].sort-asc::after{content:" ▲";font-size:8px;color:var(--gold)}
+  thead th[data-key].sort-desc::after{content:" ▼";font-size:8px;color:var(--gold)}
+  td.num{text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--text2)}
+  tr.group td{background:var(--navy);font-family:var(--font-display);font-weight:400;
+    font-size:17px;color:var(--gold);letter-spacing:.1em;padding:7px 14px;text-transform:uppercase;
+    border-bottom:1px solid var(--border2)}
+  table.players tbody tr:not(.group){cursor:pointer;transition:background .12s}
+  table.players tbody tr:not(.group):hover td{background:var(--gold-dim2)}
+  table.players td.name{font-weight:500;color:var(--white)}
+  table.players tbody tr:not(.group):hover td.name{color:var(--gold)}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-family:var(--font-mono);
+    font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+  .badge.active{background:var(--green-dim);color:var(--green)}
+  .badge.il{background:var(--red-dim);color:var(--red)}
+  .badge.res{background:rgba(255,255,255,.07);color:var(--text2)}
+  .metanote{color:var(--text3);font-size:12px;font-family:var(--font-mono);margin:0 0 12px}
+
+  /* ---- team directory (default browse view) ---- */
+  .leaguehead{font-family:var(--font-display);font-weight:400;font-size:24px;letter-spacing:.08em;
+    color:var(--white);text-transform:uppercase;margin:26px 0 2px}
+  .divhead{font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--gold);margin:16px 0 8px;opacity:.8}
+  .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;
+    margin-bottom:8px}
+  .team-card{display:flex;align-items:center;gap:10px;border:1px solid var(--border);
+    border-radius:var(--radius);padding:9px 12px;background:var(--surface);cursor:pointer;
+    text-align:left;transition:all .15s}
+  .team-card:hover{border-color:rgba(251,204,122,.4);background:var(--surface2)}
+  .team-card img{width:28px;height:28px;object-fit:contain;flex:none}
+  .team-card .tname{font-family:var(--font-display);font-weight:400;font-size:16px;
+    letter-spacing:.04em;line-height:1.1;color:var(--text)}
+
+  button{background:var(--surface);color:var(--text);border:1px solid var(--border);
+    border-radius:var(--radius);padding:8px 14px;font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+  button:hover{border-color:rgba(251,204,122,.4);color:var(--gold)}
+  button:disabled{opacity:.35;cursor:default;border-color:var(--border);color:var(--text2)}
+  @media (max-width:640px){
+    .datanote{position:static;display:inline-block;margin:0 0 10px}
+    h1{font-size:32px}
+  }
+
+  /* ---- player modal ---- */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(6,15,22,.78);backdrop-filter:blur(3px);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .modal-backdrop[hidden]{display:none}
+  .modal{background:var(--navy-dark);border:1px solid var(--border2);border-radius:var(--radius-lg);
+    max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:24px;position:relative;
+    box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .modal-close{position:absolute;top:12px;right:12px;background:none;border:1px solid var(--border);
+    color:var(--text2);width:28px;height:28px;border-radius:50%;font-size:16px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+  .modal-close:hover{color:var(--gold);border-color:var(--gold)}
+  .modal-head{display:flex;align-items:center;gap:15px;margin-bottom:14px;padding-right:38px}
+  .modal-headshot{width:74px;height:74px;border-radius:50%;object-fit:cover;background:var(--surface);
+    border:2px solid rgba(251,204,122,.4);flex:none}
+  .modal-name{font-family:var(--font-display);font-weight:400;font-size:30px;letter-spacing:.03em;
+    line-height:1;color:var(--white)}
+  .modal-sub{color:var(--text2);font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;margin-top:7px}
+
+  .tf-pills{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 18px}
+  .tf-pill{background:none;color:var(--text2);border:1px solid var(--border);border-radius:20px;
+    padding:6px 13px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;cursor:pointer;transition:all .15s}
+  .tf-pill:hover{border-color:rgba(251,204,122,.4);color:var(--gold)}
+  .tf-pill.on{background:var(--gold);border-color:var(--gold);color:var(--navy-dark)}
+
+  .modal-export-row{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px}
+  .modal-export-btn{background:var(--gold);color:var(--navy-dark);border:1px solid var(--gold);
+    border-radius:var(--radius);padding:11px 18px;font-family:var(--font-display);font-weight:400;
+    font-size:17px;letter-spacing:.06em;cursor:pointer;text-transform:uppercase;transition:all .15s}
+  .modal-export-btn:hover{background:#ffdc9b;border-color:#ffdc9b;color:var(--navy-dark)}
+  .modal-export-btn:disabled{opacity:.35;cursor:default;background:var(--surface);color:var(--text2);
+    border-color:var(--border)}
+  .modal-section{margin-bottom:18px}
+  .modal-section h3{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--gold);margin:0 0 10px;opacity:.85;font-weight:400}
+  .modal-line{font-family:var(--font-mono);font-size:15px;color:var(--white);margin-bottom:12px;
+    letter-spacing:.02em}
+  .modal-hitline{font-family:var(--font-display);font-weight:400;font-size:19px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--text2);margin-bottom:6px}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .stat-grid .cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:9px 4px;text-align:center}
+  .stat-grid .cell .v{font-family:var(--font-display);font-weight:400;font-size:24px;line-height:1;
+    color:var(--white);letter-spacing:.02em}
+  .stat-grid .cell .k{font-family:var(--font-mono);font-size:8px;color:var(--gold);
+    text-transform:uppercase;letter-spacing:.14em;margin-top:6px;opacity:.85}
+  .modal-empty{color:var(--text3);font-size:13px;font-family:var(--font-mono)}
+  .modal-dlnote{color:var(--text3);font-size:10px;font-family:var(--font-mono);text-align:right;
+    margin-top:10px;min-height:14px}
+
+  /* ---- control page: on-air status chip ---- */
+  .onair{display:flex;align-items:center;gap:10px;margin-top:14px;font-family:var(--font-mono);
+    font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase}
+  .onair[hidden]{display:none}   /* author display:flex would otherwise beat the hidden attribute */
+  .onair-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none;
+    box-shadow:0 0 0 4px var(--red-dim);animation:onair-pulse 1.6s ease-in-out infinite}
+  @keyframes onair-pulse{50%{opacity:.3}}
+  #onairText b{color:var(--gold);font-weight:400}
+  .exit-btn{background:none;color:var(--red);border:1px solid rgba(255,107,107,.4);
+    border-radius:var(--radius);padding:6px 13px;font-family:var(--font-mono);font-size:9px;
+    letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+  .exit-btn:hover{background:var(--red);border-color:var(--red);color:var(--navy-dark)}
+
+  /* ---- feed status chip (server relay) ---- */
+  .feed{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:9px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--text3);border:1px solid var(--border);
+    border-radius:20px;padding:6px 12px}
+  .feed-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex:none}
+  .feed.live .feed-dot{background:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
+  .feed.live{color:var(--green);border-color:rgba(95,221,170,.3)}
+
+  /* ---- OBS display view (?display=1) ---- */
+  #lowerThirdDisplay{display:none}
+  body.display-mode #lowerThirdDisplay{display:block;position:relative;width:1920px;height:1080px}
+  /* always present in the DOM (it's position:absolute, so it never affects layout) — shown/hidden and
+     swapped between players purely via opacity, so bringing it on, taking it off, or switching to a
+     new player all get a smooth fade instead of an instant pop */
+  .lt-bar{display:flex;align-items:center;gap:24px;position:absolute;left:0;right:0;bottom:60px;
+    height:200px;padding:0 44px;background-color:#0d1f2d;
+    background-image:linear-gradient(#fbcc7a,#fbcc7a),
+      linear-gradient(90deg,#0d1f2d 0%,#173a56 55%,#0d2233 100%);
+    background-repeat:no-repeat,no-repeat;background-size:100% 6px,100% 100%;
+    background-position:top left,top left;
+    box-sizing:border-box;opacity:0;pointer-events:none;transition:opacity .35s ease}
+  .lt-bar.lt-visible{opacity:1}
+  .lt-headshot{width:152px;height:152px;border-radius:50%;object-fit:cover;background:#173a56;
+    border:4px solid #fbcc7a;flex:none}
+  .lt-info{flex:none;min-width:0}
+  .lt-name{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:68px;line-height:1;
+    letter-spacing:.02em;color:#ffffff;white-space:nowrap}
+  .lt-sub{font-family:'DM Mono',monospace;font-weight:400;font-size:16px;color:#fbcc7a;
+    text-transform:uppercase;letter-spacing:.18em;white-space:nowrap;margin-top:9px}
+  .lt-divider{width:1px;align-self:stretch;margin:36px 0;background:rgba(255,255,255,.18);flex:none}
+  .lt-stats{flex:1;min-width:0;text-align:center}
+  .lt-hitline{font-family:'DM Mono',monospace;font-weight:400;font-size:14px;letter-spacing:.18em;
+    color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:8px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lt-hitline .split{color:#fbcc7a}
+  /* never wraps to a second row — sizeCells() in JS shrinks cell width + font to fit whatever
+     count of stats is on screen, in one line, same as the canvas PNG export does */
+  .lt-cells{display:flex;justify-content:center;align-items:flex-end;gap:0;flex-wrap:nowrap;width:100%}
+  .lt-cells .lt-cell{width:150px;flex:0 0 auto;text-align:center;min-width:0}
+  .lt-cell .v{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:62px;line-height:1;
+    color:#ffffff;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
+  .lt-cell .k{font-family:'DM Mono',monospace;font-weight:400;font-size:13px;color:#fbcc7a;
+    text-transform:uppercase;letter-spacing:.16em;white-space:nowrap;overflow:hidden;margin-top:8px}
+  .lt-watermark{position:absolute;right:24px;bottom:14px;font-family:'DM Mono',monospace;
+    font-size:12px;letter-spacing:.2em;color:rgba(255,255,255,.3);text-transform:uppercase}
+  body.display-mode{background:transparent}
+  body.display-mode header, body.display-mode main, body.display-mode #status,
+  body.display-mode .modal-backdrop{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="datanote" id="datanote">Data <b>Live via MLB StatsAPI</b></div>
+  <div class="eyebrow">Talkin' Baseball</div>
+  <div class="titlerow">
+    <h1>TRADE SNAPSHOT<span>.</span></h1>
+    <button id="goHome" class="home-btn" type="button" title="Back to all 30 teams">⌂ All Teams</button>
+    <div class="teambadge" id="teambadge"></div>
+  </div>
+  <div class="controls">
+    <div><label for="season">Season</label><select id="season"></select></div>
+    <div><label for="division">Division</label><select id="division"><option value="">All Divisions</option></select></div>
+    <div><label for="team">Team</label><select id="team"><option value="">Select a team…</option></select></div>
+    <div><label for="find">Global player search</label><input id="find" type="search" placeholder="Search any MLB player…" autocomplete="off"></div>
+    <div><label>OBS Display</label>
+      <button id="openDisplay" type="button">Open Display ↗</button>
+    </div>
+    <div><label>Relay</label>
+      <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
+    </div>
+  </div>
+  <div class="onair" id="onair" hidden>
+    <span class="onair-dot"></span>
+    <span id="onairText"></span>
+    <button id="onairClear" class="exit-btn" type="button" title="Remove the lower third from OBS">✕ Exit Lower Third</button>
+  </div>
+</header>
+<div id="status">Loading…</div>
+<main id="out"></main>
+
+<div id="modalBackdrop" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalName">
+    <button id="modalClose" class="modal-close" type="button" aria-label="Close">×</button>
+    <div class="modal-head">
+      <img id="modalHeadshot" class="modal-headshot" alt="">
+      <div>
+        <div class="modal-name" id="modalName"></div>
+        <div class="modal-sub" id="modalSub"></div>
+      </div>
+    </div>
+    <div class="tf-pills" id="tfPills"></div>
+    <div id="modalBody" class="modal-body"></div>
+    <div class="modal-export-row" id="modalExportRow">
+      <button id="modalDownloadBat" class="modal-export-btn" type="button" hidden
+        title="Push to OBS and download hitting lower-third PNG">⤓ Hitting PNG</button>
+      <button id="modalDownloadPit" class="modal-export-btn" type="button" hidden
+        title="Push to OBS and download pitching lower-third PNG">⤓ Pitching PNG</button>
+      <button id="modalExitOnAir" class="exit-btn" type="button"
+        title="Remove the lower third from OBS">✕ Exit Lower Third</button>
+    </div>
+    <div id="modalDlNote" class="modal-dlnote"></div>
+  </div>
+</div>
+
+<!-- OBS Browser Source view: add this same file/URL with ?display=1 as a Browser Source.
+     Add &src=server as well when the relay (trade_snapshot_server.py) is running. -->
+<div id="lowerThirdDisplay">
+  <div class="lt-bar" id="ltBar">
+    <img id="ltHeadshot" class="lt-headshot" alt="">
+    <div class="lt-info">
+      <div class="lt-name" id="ltName"></div>
+      <div class="lt-sub" id="ltSub"></div>
+    </div>
+    <div class="lt-divider"></div>
+    <div class="lt-stats">
+      <div class="lt-hitline" id="ltHitline"></div>
+      <div class="lt-cells" id="ltCells"></div>
+    </div>
+    <div class="lt-watermark">Talkin' Baseball</div>
+  </div>
+</div>
+
+<script>
+const API = 'https://statsapi.mlb.com/api/v1';
+const j = u => fetch(u).then(r => { if(!r.ok) throw new Error(u+' → '+r.status); return r.json(); });
+const jCache = new Map();
+const jc = u => (jCache.has(u) ? jCache.get(u) : (jCache.set(u, j(u)), jCache.get(u)));
+const $ = id => document.getElementById(id);
+const el = (t, cls, txt) => { const e = document.createElement(t); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+// ---- control ↔ display link ------------------------------------------------------------
+// Two ways to get a stat line onto the OBS bar, in order of preference:
+//
+//   1. Server relay (?display=1&src=server) — the control page POSTs the on-air payload to
+//      trade_snapshot_server.py and the display polls it. Needed for a real OBS Browser Source,
+//      which is its own browser and can't hear BroadcastChannel or read our localStorage.
+//   2. BroadcastChannel + localStorage — instant, no server, but only works between tabs of the
+//      same browser. Fine for a second monitor / window capture.
+//
+// Both run at once; whichever the display view is listening on wins.
+const LT_KEY = 'tb-lower-third-onair';
+const params = new URLSearchParams(location.search);
+const isDisplayMode = params.get('display') === '1';
+const useServer = params.get('src') === 'server';
+const ltChannel = 'BroadcastChannel' in window ? new BroadcastChannel('tb-lower-third') : null;
+if (isDisplayMode) document.body.classList.add('display-mode');
+
+// When the page itself is served over http(s) the relay is same-origin. Opened from file://
+// we still try localhost, because that's where the relay lives when you run it by hand.
+const RELAY = /^https?:$/.test(location.protocol) ? '' : 'http://localhost:8787';
+const RELAY_POLL_MS = 400;
+
+const logoURL = id => `https://www.mlbstatic.com/team-logos/${id}.svg`;
+const headshotURL = pid =>
+  `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png,q_auto:best,f_auto/v1/people/${pid}/headshot/67/current`;
+
+function say(msg, isErr) { $('status').textContent = msg || ''; $('status').className = isErr ? 'err' : ''; }
+
+// =====================================================================================
+// Teams / divisions / global player index
+// =====================================================================================
+
+let teamsById = new Map();       // id -> team object {id,name,abbreviation,division,league}
+let divisions = [];              // [{league, name, short, teams:[...]}] in display order
+let allPlayers = [];             // full-season player index for global search
+let currentTeamId = null;
+let currentView = 'directory';   // 'directory' | 'roster' | 'search'
+
+const divShort = name => (name || '').replace('American League', 'AL').replace('National League', 'NL');
+
+async function loadTeams(year) {
+  const d = await j(`${API}/teams?sportId=1&season=${year}&activeStatus=Yes`);
+  const teams = (d.teams || []).filter(t => t.division && t.league);
+  teamsById = new Map(teams.map(t => [t.id, t]));
+
+  const byDiv = new Map();
+  teams.forEach(t => {
+    const key = t.division.id;
+    if (!byDiv.has(key)) byDiv.set(key, { league: t.league.name, name: t.division.name, short: divShort(t.division.name), teams: [] });
+    byDiv.get(key).teams.push(t);
+  });
+  divisions = [...byDiv.values()].sort((a, b) => a.league.localeCompare(b.league) || a.name.localeCompare(b.name));
+  divisions.forEach(dv => dv.teams.sort((a, b) => a.name.localeCompare(b.name)));
+
+  $('division').innerHTML = '<option value="">All Divisions</option>' +
+    divisions.map(dv => `<option value="${dv.short}">${dv.short}</option>`).join('');
+  populateTeamSelect();
+}
+
+function populateTeamSelect(divShortFilter) {
+  const list = divShortFilter ? divisions.filter(dv => dv.short === divShortFilter) : divisions;
+  const opts = list.map(dv =>
+    `<optgroup label="${dv.short}">` +
+    dv.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('') +
+    `</optgroup>`).join('');
+  $('team').innerHTML = '<option value="">Select a team…</option>' + opts;
+}
+
+async function loadPlayerIndex(year) {
+  const d = await j(`${API}/sports/1/players?season=${year}`);
+  allPlayers = (d.people || []).map(p => ({
+    id: p.id, name: p.fullName, pos: (p.primaryPosition && p.primaryPosition.abbreviation) || '',
+    number: p.primaryNumber || '', teamId: p.currentTeam ? p.currentTeam.id : null,
+    teamName: p.currentTeam ? p.currentTeam.name : '',
+  })).filter(p => p.teamId);
+}
+
+function setTeamBadge(team) {
+  const box = $('teambadge');
+  if (!team) { box.innerHTML = ''; return; }
+  box.innerHTML = `<img src="${logoURL(team.id)}" alt="${team.name}" onerror="this.remove()">` +
+    `<span class="tn">${team.name}</span>`;
+}
+
+// =====================================================================================
+// Directory (default browse view) — every team, grouped by league/division
+// =====================================================================================
+
+function renderDirectory(divShortFilter) {
+  currentView = 'directory';
+  setTeamBadge(null);
+  const out = $('out'); out.innerHTML = '';
+  say('');
+  const list = divShortFilter ? divisions.filter(dv => dv.short === divShortFilter) : divisions;
+  let curLeague = null;
+  list.forEach(dv => {
+    if (dv.league !== curLeague) { out.appendChild(el('div', 'leaguehead', dv.league)); curLeague = dv.league; }
+    out.appendChild(el('div', 'divhead', dv.short));
+    const grid = el('div', 'team-grid');
+    dv.teams.forEach(t => {
+      const card = el('button', 'team-card');
+      card.type = 'button';
+      card.innerHTML = `<img src="${logoURL(t.id)}" alt="" onerror="this.remove()"><span class="tname">${t.name}</span>`;
+      card.onclick = () => { $('team').value = t.id; $('division').value = dv.short; guard(loadRoster)(t.id); };
+      grid.appendChild(card);
+    });
+    out.appendChild(grid);
+  });
+}
+
+// =====================================================================================
+// Roster — active / injured list / 40-man reserve, grouped, click a name to open the modal
+// =====================================================================================
+
+const POS_ORDER = { C:1, '1B':2, '2B':3, '3B':4, SS:5, LF:6, CF:7, RF:8, OF:9, DH:10, SP:11, RP:12, P:13, TWP:14 };
+const posRank = p => POS_ORDER[p] ?? 50;
+
+function classifyStatus(entry) {
+  const code = entry.status && entry.status.code;
+  const desc = (entry.status && entry.status.description) || '';
+  if (code === 'A') return 'active';
+  if (/IL|DL/i.test(desc) || /^D/.test(code || '')) return 'il';
+  return 'res';
+}
+
+async function loadRoster(teamId) {
+  currentTeamId = teamId; currentView = 'roster';
+  const team = teamsById.get(+teamId);
+  const y = $('season').value;
+  setTeamBadge(team);
+  $('find').value = '';
+  say('Loading roster…');
+  let roster = [];
+  try {
+    const d = await j(`${API}/teams/${teamId}/roster?rosterType=40Man&season=${y}`);
+    roster = d.roster || [];
+  } catch (e) { /* fall through to active */ }
+  if (!roster.length) {
+    try {
+      const d = await j(`${API}/teams/${teamId}/roster?rosterType=active&season=${y}`);
+      roster = (d.roster || []).map(r => ({ ...r, status: r.status || { code: 'A', description: 'Active' } }));
+    } catch (e) { say('Could not load that roster: ' + e.message, true); return; }
+  }
+  say('');
+  rosterState = {
+    team, year: y,
+    rows: roster.map(r => ({
+      id: r.person.id, name: r.person.fullName, pos: (r.position && r.position.abbreviation) || '',
+      number: r.jerseyNumber || '', group: classifyStatus(r),
+    })),
+  };
+  sortState = { table: 'roster', key: null, dir: 1 };
+  paintRoster();
+}
+
+// numbers sort numerically (blank last); everything else sorts as case-insensitive text
+function sortRows(rows, key, dir) {
+  if (!key) return rows;
+  return [...rows].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (key === 'number') {
+      av = av === '' || av == null ? null : +av; bv = bv === '' || bv == null ? null : +bv;
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1; if (bv === null) return -1;
+      return (av - bv) * dir;
+    }
+    av = (av || '').toString().toLowerCase(); bv = (bv || '').toString().toLowerCase();
+    if (av < bv) return -1 * dir; if (av > bv) return 1 * dir; return 0;
+  });
+}
+
+// stamp a header cell as sortable and light it up if it's the active sort column
+function sortableTh(label, key, tbl) {
+  const th = el('th', null, label);
+  th.dataset.key = key; th.dataset.tbl = tbl;
+  if (sortState.table === tbl && sortState.key === key) th.classList.add(sortState.dir === 1 ? 'sort-asc' : 'sort-desc');
+  return th;
+}
+
+function paintRoster() {
+  if (!rosterState) return;
+  const { team, year, rows } = rosterState;
+  currentIndex = new Map();
+  rows.forEach(r => currentIndex.set(String(r.id), { id: r.id, name: r.name, pos: r.pos, team: team ? team.name : '', teamId: team ? team.id : null }));
+
+  const groups = [
+    ['active', 'ACTIVE ROSTER'],
+    ['il', 'INJURED LIST'],
+    ['res', '40-MAN / RESERVE'],
+  ];
+  const table = el('table', 'players');
+  const thead = el('thead'); const hr = el('tr');
+  hr.appendChild(sortableTh('#', 'number', 'roster'));
+  hr.appendChild(sortableTh('Name', 'name', 'roster'));
+  hr.appendChild(sortableTh('Pos', 'pos', 'roster'));
+  hr.appendChild(sortableTh('Status', 'group', 'roster'));
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = el('tbody');
+  const active = sortState.table === 'roster' ? sortState : null;
+  groups.forEach(([key, label]) => {
+    let g = rows.filter(r => r.group === key);
+    g = active && active.key
+      ? sortRows(g, active.key, active.dir)
+      : g.sort((a, b) => posRank(a.pos) - posRank(b.pos) || a.name.localeCompare(b.name));
+    if (!g.length) return;
+    const trG = el('tr', 'group');
+    const tdG = el('td', null, `${label} (${g.length})`); tdG.colSpan = 4;
+    trG.appendChild(tdG); tbody.appendChild(trG);
+    g.forEach(r => {
+      const tr = el('tr'); tr.dataset.pid = r.id;
+      tr.appendChild(el('td', 'num', r.number));
+      tr.appendChild(el('td', 'name', r.name));
+      tr.appendChild(el('td', null, r.pos));
+      const badgeCls = key === 'active' ? 'active' : key === 'il' ? 'il' : 'res';
+      const badgeText = key === 'active' ? 'Active' : key === 'il' ? 'Injured List' : 'Reserve';
+      tr.appendChild(el('td', null, '')).innerHTML = `<span class="badge ${badgeCls}">${badgeText}</span>`;
+      tbody.appendChild(tr);
+    });
+  });
+  table.appendChild(tbody);
+  addTable(`${team ? team.name : 'Team'} Roster — ${year}`, table);
+}
+
+function addTable(title, table, note) {
+  const out = $('out'); out.innerHTML = '';
+  out.appendChild(el('h2', null, title));
+  if (note) out.appendChild(el('div', 'metanote', note));
+  if (table) { const w = el('div', 'wrap'); w.appendChild(table); out.appendChild(w); }
+}
+
+// =====================================================================================
+// Global search — instant client-side filter across every rostered MLB player
+// =====================================================================================
+
+let currentIndex = new Map(); // pid -> {id,name,pos,team,teamId}, used by the player modal
+let rosterState = null;       // {team, year, rows} — cached so column-header sorts don't refetch
+let searchState = null;       // {query, teamGroups, total, limit} — same, for search results
+let sortState = { table: null, key: null, dir: 1 };
+
+function renderSearchResults(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) { searchState = null; renderDirectory($('division').value); return; }
+  currentView = 'search';
+  setTeamBadge(null);
+  const matches = allPlayers.filter(p => p.name.toLowerCase().includes(q));
+  say('');
+  if (!matches.length) { searchState = null; addTable(`Search — "${query}"`, null, 'No players matched that search.'); return; }
+
+  const LIMIT = 80;
+  const shown = matches.slice(0, LIMIT);
+  const byTeam = new Map();
+  shown.forEach(p => {
+    if (!byTeam.has(p.teamId)) byTeam.set(p.teamId, []);
+    byTeam.get(p.teamId).push(p);
+  });
+  const teamGroups = [...byTeam.entries()]
+    .map(([tid, players]) => ({ team: teamsById.get(tid), players }))
+    .sort((a, b) => (a.team ? a.team.name : '').localeCompare(b.team ? b.team.name : ''));
+
+  searchState = { query, teamGroups, total: matches.length, limit: LIMIT };
+  sortState = { table: 'search', key: null, dir: 1 };
+  paintSearch();
+}
+
+function paintSearch() {
+  if (!searchState) return;
+  const { query, teamGroups, total, limit } = searchState;
+  currentIndex = new Map();
+  const table = el('table', 'players');
+  const thead = el('thead'); const hr = el('tr');
+  hr.appendChild(sortableTh('#', 'number', 'search'));
+  hr.appendChild(sortableTh('Name', 'name', 'search'));
+  hr.appendChild(sortableTh('Pos', 'pos', 'search'));
+  hr.appendChild(sortableTh('Team', 'teamName', 'search'));
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = el('tbody');
+  const active = sortState.table === 'search' ? sortState : null;
+  teamGroups.forEach(({ team, players }) => {
+    const trG = el('tr', 'group');
+    const tdG = el('td', null, team ? team.name : 'Unknown Team'); tdG.colSpan = 4;
+    trG.appendChild(tdG); tbody.appendChild(trG);
+    const rows = active && active.key ? sortRows(players, active.key, active.dir)
+                                       : [...players].sort((a, b) => a.name.localeCompare(b.name));
+    rows.forEach(p => {
+      currentIndex.set(String(p.id), { id: p.id, name: p.name, pos: p.pos, team: p.teamName, teamId: p.teamId });
+      const tr = el('tr'); tr.dataset.pid = p.id;
+      tr.appendChild(el('td', 'num', p.number));
+      tr.appendChild(el('td', 'name', p.name));
+      tr.appendChild(el('td', null, p.pos));
+      tr.appendChild(el('td', null, p.teamName));
+      tbody.appendChild(tr);
+    });
+  });
+  table.appendChild(tbody);
+  addTable(`Search — "${query}"`, table, total > limit ? `Showing first ${limit} of ${total} matches — refine your search to narrow it down.` : '');
+}
+
+// =====================================================================================
+// Player modal — timeframe pills (Full Season / Last 7 / 14 / 30 days), hitting + pitching
+// =====================================================================================
+
+const TF = [
+  ['season', 'FULL SEASON'],
+  ['7', 'LAST 7 DAYS'],
+  ['14', 'LAST 14 DAYS'],
+  ['30', 'LAST 30 DAYS'],
+  ['vl', 'VS LEFTIES'],
+  ['vr', 'VS RIGHTIES'],
+];
+const isSplitTf = tf => tf === 'vl' || tf === 'vr';
+let modalPid = null, modalRow = null, modalTf = 'season';
+let modalBat = null, modalPit = null;  // currently-loaded stat objects for the active timeframe
+
+// K% (strikeout rate) isn't a field the API hands back pre-computed, but every stat shape we use —
+// season, byDateRange, and the vs-L/R splits — carries the raw counts to derive it ourselves.
+const kPct = (k, denom) => denom ? (k / denom * 100).toFixed(1) + '%' : '–';
+
+function statGrid(pairs) {
+  return `<div class="stat-grid">` + pairs.map(([k, v]) =>
+    `<div class="cell"><div class="v">${v != null && v !== '' ? v : '–'}</div><div class="k">${k}</div></div>`).join('') + `</div>`;
+}
+function apiBattingBlock(st) {
+  if (!st) return `<div class="modal-empty">No hitting stats for this range.</div>`;
+  const cells = [['HR', st.homeRuns], ['RBI', st.rbi], ['BB', st.baseOnBalls],
+                 ['K', st.strikeOuts], ['SB', st.stolenBases], ['HBP', st.hitByPitch],
+                 ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
+  return `<div class="modal-hitline">${st.hits}-for-${st.atBats}</div>`
+    + `<div class="modal-line">${st.avg} / ${st.obp} / ${st.slg} / ${st.ops} <span style="color:var(--text3)">AVG/OBP/SLG/OPS</span></div>`
+    + statGrid(cells);
+}
+function apiPitchingBlock(st) {
+  if (!st) return `<div class="modal-empty">No pitching stats for this range.</div>`;
+  return `<div class="modal-line">${st.inningsPitched} IP · ${st.era} ERA · ${st.wins}-${st.losses}</div>`
+    + statGrid([['WHIP', st.whip], ['K', st.strikeOuts], ['BB', st.baseOnBalls],
+                ['SV', st.saves], ['ER', st.earnedRuns], ['K%', kPct(st.strikeOuts, st.battersFaced)]]);
+}
+// vs-lefties/vs-righties pitching splits come back as a "batters faced" line, not a game record —
+// no ERA, no W-L, no saves (those aren't a real concept split by opposing-batter handedness).
+function apiPitchingSplitBlock(st) {
+  if (!st) return `<div class="modal-empty">No pitching stats for this range.</div>`;
+  return `<div class="modal-hitline">${st.hits}-for-${st.atBats} allowed</div>`
+    + `<div class="modal-line">${st.inningsPitched} IP · ${st.whip} WHIP · ${st.avg} BAA</div>`
+    + statGrid([['K', st.strikeOuts], ['BB', st.baseOnBalls], ['HR', st.homeRuns],
+                ['H', st.hits], ['BF', st.battersFaced], ['K%', kPct(st.strikeOuts, st.battersFaced)]]);
+}
+
+function fmtDate(d) { return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; }
+function dateRangeForDays(n) {
+  const end = new Date(); const start = new Date(); start.setDate(start.getDate() - n);
+  return { startDate: fmtDate(start), endDate: fmtDate(end) };
+}
+// group is 'hitting' | 'pitching' | omitted — the vs-L/R label reads differently depending on
+// which side of the ball it's describing (a hitter faces LHP, a pitcher faces LHB)
+function tfLabel(tf, year, group) {
+  if (tf === 'season') return `${year} SEASON`;
+  if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
+  if (tf === 'vr') return group === 'pitching' ? 'VS RHB' : 'VS RHP';
+  return `LAST ${tf} DAYS`;
+}
+
+async function fetchStat(pid, group, tf, year) {
+  let url;
+  if (tf === 'season') {
+    url = `${API}/people/${pid}/stats?stats=season&season=${year}&group=${group}`;
+  } else if (isSplitTf(tf)) {
+    url = `${API}/people/${pid}/stats?stats=statSplits&sitCodes=${tf}&season=${year}&group=${group}`;
+  } else {
+    const { startDate, endDate } = dateRangeForDays(+tf);
+    url = `${API}/people/${pid}/stats?stats=byDateRange&startDate=${startDate}&endDate=${endDate}&season=${year}&group=${group}`;
+  }
+  const d = await jc(url);
+  const sec = (d.stats || [])[0];
+  return sec && sec.splits && sec.splits.length ? sec.splits[0].stat : null;
+}
+
+function wantsBatting(row) { return row.pos !== 'P'; }
+function wantsPitching(row) { return row.pos === 'P' || row.pos === 'TWP'; }
+
+async function openPlayerModal(pid) {
+  const row = currentIndex.get(String(pid));
+  if (!row) return;
+  modalPid = pid; modalRow = row; modalTf = 'season';
+  $('modalDlNote').textContent = '';
+  $('modalHeadshot').src = headshotURL(pid);
+  $('modalName').textContent = row.name;
+  $('modalSub').textContent = [row.pos, row.team].filter(Boolean).join(' · ');
+  $('modalBackdrop').hidden = false;
+  paintTfPills();
+  await loadModalStats();
+}
+
+function paintTfPills() {
+  const box = $('tfPills'); box.innerHTML = '';
+  TF.forEach(([key, label]) => {
+    const b = el('button', 'tf-pill' + (key === modalTf ? ' on' : ''), label);
+    b.type = 'button';
+    b.onclick = () => { modalTf = key; paintTfPills(); loadModalStats(); };
+    box.appendChild(b);
+  });
+}
+
+async function loadModalStats() {
+  const pid = modalPid, row = modalRow, tf = modalTf;
+  const year = $('season').value;
+  $('modalBody').innerHTML = `<div class="modal-empty">Loading ${tfLabel(tf, year).toLowerCase()}…</div>`;
+  const doBat = wantsBatting(row), doPit = wantsPitching(row);
+  const [bat, pit] = await Promise.all([
+    doBat ? fetchStat(pid, 'hitting', tf, year).catch(() => null) : Promise.resolve(null),
+    doPit ? fetchStat(pid, 'pitching', tf, year).catch(() => null) : Promise.resolve(null),
+  ]);
+  if (modalPid !== pid || modalTf !== tf) return; // selection changed mid-flight
+  modalBat = bat; modalPit = pit;
+
+  const parts = [];
+  if (doBat) parts.push([`${tfLabel(tf, year, 'hitting')} · Hitting`, apiBattingBlock(bat)]);
+  if (doPit) parts.push([`${tfLabel(tf, year, 'pitching')} · Pitching`, isSplitTf(tf) ? apiPitchingSplitBlock(pit) : apiPitchingBlock(pit)]);
+  $('modalBody').innerHTML = parts.length
+    ? parts.map(([t, html]) => `<div class="modal-section"><h3>${t}</h3>${html}</div>`).join('')
+    : `<div class="modal-empty">No stats available for this range.</div>`;
+
+  $('modalDownloadBat').hidden = !(bat && +bat.atBats > 0);
+  $('modalDownloadPit').hidden = !(pit && (+pit.outs > 0 || +pit.battersFaced > 0 || +pit.gamesPlayed > 0));
+
+  autoPushOnAir();
+}
+
+function closeModal() { $('modalBackdrop').hidden = true; }
+
+// =====================================================================================
+// Broadcast graphic: a lower-third PNG, drawn on canvas so it needs no external assets
+// =====================================================================================
+
+function battingGraphicData(st, label) {
+  if (!st) return null;
+  const cells = [['AVG', st.avg], ['OBP', st.obp], ['SLG', st.slg], ['OPS', st.ops], ['HR', st.homeRuns], ['RBI', st.rbi],
+                 ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
+  return { label, hitLine: `${st.hits}-for-${st.atBats}`, cells };
+}
+function pitchingGraphicData(st, label) {
+  if (!st) return null;
+  return { label, hitLine: `${st.gamesPlayed || 0} G${st.gamesStarted ? ' · ' + st.gamesStarted + ' GS' : ''}`, cells: [
+    ['ERA', st.era], ['WHIP', st.whip], ['IP', st.inningsPitched], ['K', st.strikeOuts], ['BB', st.baseOnBalls],
+    ['W-L', `${st.wins}-${st.losses}`], ['K%', kPct(st.strikeOuts, st.battersFaced)] ] };
+}
+// vs-L/R pitching splits have no ERA/W-L/saves (not a real concept for that split), so swap in
+// what the API actually gives us: IP/WHIP/K/BB plus the opposing batting line (BAA/HR)
+function pitchingSplitGraphicData(st, label) {
+  if (!st) return null;
+  return { label, hitLine: `${st.battersFaced || 0} BF`, cells: [
+    ['IP', st.inningsPitched], ['WHIP', st.whip], ['K', st.strikeOuts], ['BB', st.baseOnBalls], ['BAA', st.avg],
+    ['HR', st.homeRuns], ['K%', kPct(st.strikeOuts, st.battersFaced)] ] };
+}
+
+function loadSafeImage(src) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const t = document.createElement('canvas'); t.width = t.height = 2;
+        t.getContext('2d').drawImage(img, 0, 0, 2, 2);
+        t.toDataURL();
+        resolve(img);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+async function renderLowerThird(data, row, pid) {
+  await Promise.all([
+    document.fonts.load('68px "Bebas Neue"'),
+    document.fonts.load('400 16px "DM Mono"'),
+    document.fonts.load('500 16px "DM Mono"'),
+  ]);
+  const img = await loadSafeImage(headshotURL(pid));
+
+  const CW = 1920, CH = 1080, W = 1920, H = 200, BOTTOM_MARGIN = 60;
+  const canvas = document.createElement('canvas'); canvas.width = CW; canvas.height = CH;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(0, CH - H - BOTTOM_MARGIN);
+
+  // navy sweep + the gold rule across the top — same lockup as the live OBS bar
+  const g = ctx.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, '#0d1f2d'); g.addColorStop(.55, '#173a56'); g.addColorStop(1, '#0d2233');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#fbcc7a'; ctx.fillRect(0, 0, W, 6);
+
+  const cx = 120, cy = H / 2, r = 76;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath();
+  if (img) {
+    ctx.save(); ctx.clip();
+    const size = r * 2, scale = Math.max(size / img.width, size / img.height);
+    const iw = img.width * scale, ih = img.height * scale;
+    ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#173a56'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.font = '400 13px "DM Mono"';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('NO PHOTO', cx, cy);
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#fbcc7a'; ctx.stroke();
+
+  const nx = 236;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#ffffff'; ctx.font = '72px "Bebas Neue"';
+  ctx.fillText(row.name.toUpperCase(), nx, 120);
+  ctx.fillStyle = '#fbcc7a'; ctx.font = '400 17px "DM Mono"';
+  ctx.fillText([row.pos, row.team].filter(Boolean).join('  ·  ').toUpperCase(), nx, 154);
+
+  const divX = 800;
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(divX, 36); ctx.lineTo(divX, H - 36); ctx.stroke();
+
+  const startX = divX + 30, avail = W - 30 - startX;
+  const cellW = Math.min(150, avail / data.cells.length);
+  const groupW = cellW * data.cells.length, groupStart = startX + (avail - groupW) / 2;
+
+  // split label (e.g. "LAST 30 DAYS") in gold, the counting line (e.g. "12-FOR-72") faded next to it
+  const splitText = data.label ? data.label.toUpperCase() : '';
+  const subText = data.hitLine ? data.hitLine.toUpperCase() : '';
+  if (splitText) {
+    let fs = 18;
+    const measure = size => {
+      ctx.font = `500 ${size}px "DM Mono"`;
+      const w1 = ctx.measureText(splitText).width;
+      ctx.font = `400 ${size}px "DM Mono"`;
+      const w2 = subText ? ctx.measureText('   ·   ' + subText).width : 0;
+      return w1 + w2;
+    };
+    while (fs > 10 && measure(fs) > groupW) fs -= 1;
+    const totalW = measure(fs);
+    let x = groupStart + groupW / 2 - totalW / 2;
+    ctx.textAlign = 'left';
+    ctx.font = `500 ${fs}px "DM Mono"`;
+    ctx.fillStyle = '#fbcc7a';
+    ctx.fillText(splitText, x, 46);
+    x += ctx.measureText(splitText).width;
+    if (subText) {
+      ctx.font = `400 ${fs}px "DM Mono"`;
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.fillText('   ·   ' + subText, x, 46);
+    }
+  }
+  const valueSize = data.cells.length > 6 ? 68 : 80, labelSize = data.cells.length > 6 ? 14 : 16;
+  data.cells.forEach(([label, value], i) => {
+    const x = groupStart + i * cellW + cellW / 2;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    let vs = valueSize;
+    ctx.font = `${vs}px "Bebas Neue"`;
+    while (vs > 26 && ctx.measureText(String(value)).width > cellW - 10)
+      ctx.font = `${vs -= 2}px "Bebas Neue"`;
+    ctx.fillText(String(value), x, H / 2 + 22);
+    ctx.fillStyle = '#fbcc7a'; ctx.font = `400 ${labelSize}px "DM Mono"`;
+    ctx.fillText(label, x, H / 2 + 54);
+  });
+
+  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '400 12px "DM Mono"';
+  ctx.fillText("TALKIN' BASEBALL", W - 24, H - 16);
+
+  return { canvas, hadPhoto: !!img };
+}
+
+// ---- on-air: push a player's stat line to the OBS display view (control side) ----
+
+let onAirPid = null, onAirKind = null;
+
+function relayPost(payload) {
+  // fire-and-forget: the relay is optional, so a failure here is just "no server running"
+  fetch(RELAY + '/state', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || { clear: true, ts: Date.now() }),
+  }).then(() => setFeed(true)).catch(() => setFeed(false));
+}
+
+function setFeed(live) {
+  const chip = $('feedChip'); if (!chip) return;
+  chip.classList.toggle('live', !!live);
+  $('feedText').textContent = live ? 'Relay live' : 'Local only';
+}
+
+function pushOnAir(pid, kind, row, data) {
+  if (!row || !data) return;
+  onAirPid = pid; onAirKind = kind;
+  const payload = { pid, kind, name: row.name, pos: row.pos, team: row.team, data, ts: Date.now() };
+  try { localStorage.setItem(LT_KEY, JSON.stringify(payload)); } catch {}
+  if (ltChannel) ltChannel.postMessage(payload);
+  relayPost(payload);
+  updateOnAirUI(payload);
+}
+
+function clearOnAir() {
+  onAirPid = onAirKind = null;
+  try { localStorage.removeItem(LT_KEY); } catch {}
+  if (ltChannel) ltChannel.postMessage({ clear: true });
+  relayPost(null);
+  updateOnAirUI(null);
+}
+
+function updateOnAirUI(payload) {
+  const box = $('onair'); if (!box) return;
+  box.hidden = !payload;
+  if (payload) $('onairText').innerHTML = `On air: <b>${payload.name}</b> · ${payload.data.label}`;
+}
+
+// Whenever the modal opens or the timeframe changes, auto-push whichever line is primary
+// (hitting for position players, pitching for pitchers) so the OBS bar always tracks what's on screen.
+function autoPushOnAir() {
+  if (!modalPid || !modalRow) return;
+  const year = $('season').value;
+  const pitFn = isSplitTf(modalTf) ? pitchingSplitGraphicData : pitchingGraphicData;
+  if (wantsPitching(modalRow) && !wantsBatting(modalRow)) {
+    const data = pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
+    if (data) pushOnAir(modalPid, 'pit', modalRow, data);
+  } else {
+    const batData = battingGraphicData(modalBat, tfLabel(modalTf, year, 'hitting'));
+    const data = batData || pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
+    if (data) pushOnAir(modalPid, data === batData ? 'bat' : 'pit', modalRow, data);
+  }
+}
+
+// matches the CSS transition duration on .lt-bar, so a player-to-player swap fades the old one
+// fully out before the new content is painted and faded back in — never an instant content pop
+const LT_FADE_MS = 350;
+let ltFadeTimer = null;
+let ltVisible = false;
+
+function paintOnAirBar(payload) {
+  const { name, pos, team, data } = payload;
+  $('ltHeadshot').src = headshotURL(payload.pid);
+  $('ltName').textContent = name.toUpperCase();
+  $('ltSub').textContent = [pos, team].filter(Boolean).join('  ·  ').toUpperCase();
+  const hitEl = $('ltHitline');
+  const splitText = data.label ? data.label.toUpperCase() : '';
+  const subText = data.hitLine ? data.hitLine.toUpperCase() : '';
+  hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  ·  ' + subText : ''}` : '';
+  hitEl.style.display = splitText ? '' : 'none';
+  $('ltCells').innerHTML = data.cells.map(([label, value]) =>
+    `<div class="lt-cell"><div class="v">${value}</div><div class="k">${label}</div></div>`).join('');
+  sizeCells(data.cells.length);
+  $('ltBar').classList.add('lt-visible');
+  ltVisible = true;
+}
+
+function renderOnAirBar(payload) {
+  const bar = $('ltBar');
+  if (!bar) return;
+  clearTimeout(ltFadeTimer);
+
+  if (!payload) {
+    bar.classList.remove('lt-visible');  // fades out via the CSS transition, content stays as-is underneath
+    ltVisible = false;
+    return;
+  }
+
+  if (ltVisible) {
+    // already on screen with someone else — fade that out first, then swap content and fade the new one in
+    bar.classList.remove('lt-visible');
+    ltFadeTimer = setTimeout(() => paintOnAirBar(payload), LT_FADE_MS);
+  } else {
+    paintOnAirBar(payload);
+  }
+}
+
+// Shrinks each stat cell (width + font) to whatever fits the available bar width in one row —
+// mirrors the shrink-to-fit the canvas PNG export already does, so the live OBS bar never wraps
+// to a second line no matter how many cells a timeframe adds.
+function sizeCells(n) {
+  const wrap = $('ltCells');
+  if (!wrap || !n) return;
+  const avail = wrap.clientWidth || n * 150;
+  const w = Math.max(64, Math.min(150, Math.floor(avail / n)));
+  const tight = w < 130, veryTight = w < 90;
+  const valueFs = veryTight ? 36 : tight ? 46 : 62;
+  const keyFs = veryTight ? 9 : tight ? 11 : 13;
+  wrap.querySelectorAll('.lt-cell').forEach(cell => {
+    cell.style.width = w + 'px';
+    const v = cell.querySelector('.v'), k = cell.querySelector('.k');
+    if (v) v.style.fontSize = valueFs + 'px';
+    if (k) k.style.fontSize = keyFs + 'px';
+  });
+}
+
+function initDisplay() {
+  if (useServer) {
+    // OBS Browser Source path: poll the relay. Only repaint when the timestamp actually moves,
+    // so a 2.5-per-second poll doesn't restart the fade on every tick.
+    let lastTs = null;
+    const tick = async () => {
+      try {
+        const s = await (await fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' })).json();
+        const ts = s && s.ts != null ? s.ts : null;
+        if (ts !== lastTs) {
+          lastTs = ts;
+          renderOnAirBar(s && !s.clear && s.pid ? s : null);
+        }
+      } catch {}
+    };
+    tick();
+    setInterval(tick, RELAY_POLL_MS);
+    return;
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(LT_KEY) || 'null');
+    if (cached) renderOnAirBar(cached);
+  } catch {}
+  if (ltChannel) ltChannel.onmessage = e => renderOnAirBar(e.data && e.data.clear ? null : e.data);
+  window.addEventListener('storage', e => {
+    if (e.key !== LT_KEY) return;
+    try { renderOnAirBar(e.newValue ? JSON.parse(e.newValue) : null); } catch {}
+  });
+}
+
+async function downloadGraphic(kind) {  // kind: 'bat' | 'pit'
+  const pid = modalPid, row = modalRow;
+  const btn = $(kind === 'bat' ? 'modalDownloadBat' : 'modalDownloadPit'), note = $('modalDlNote');
+  if (!row) return;
+  const year = $('season').value;
+  const pitFn = isSplitTf(modalTf) ? pitchingSplitGraphicData : pitchingGraphicData;
+  const data = kind === 'bat' ? battingGraphicData(modalBat, tfLabel(modalTf, year, 'hitting'))
+                               : pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
+  if (!data) { note.textContent = `No ${kind === 'bat' ? 'hitting' : 'pitching'} stats available to build a graphic yet.`; return; }
+
+  btn.disabled = true; note.textContent = `Building graphic…`;
+  try {
+    pushOnAir(pid, kind, row, data);
+    const { canvas, hadPhoto } = await renderLowerThird(data, row, pid);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('Canvas export failed');
+    const a = el('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${row.name.replace(/[^\w\d]+/g, '-')}-${kind}-${modalTf}-lower-third.png`;
+    a.click(); URL.revokeObjectURL(a.href);
+    note.textContent = hadPhoto ? 'Pushed to OBS + downloaded ✓' : 'Pushed to OBS + downloaded ✓ (headshot host blocked embedding — graphic saved without it)';
+  } catch (e) {
+    note.textContent = 'Could not build the graphic: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// =====================================================================================
+// Wiring
+// =====================================================================================
+
+const guard = fn => (...a) => Promise.resolve(fn(...a)).catch(e => say(e.message, true));
+
+let searchDebounce = null;
+$('find').oninput = () => {
+  clearTimeout(searchDebounce);
+  const q = $('find').value;
+  searchDebounce = setTimeout(() => guard(async () => renderSearchResults(q))(), 150);
+};
+
+$('division').onchange = () => {
+  const dv = $('division').value;
+  populateTeamSelect(dv);
+  $('team').value = '';
+  $('find').value = '';
+  renderDirectory(dv);
+};
+$('goHome').onclick = () => {
+  $('division').value = '';
+  populateTeamSelect('');
+  $('team').value = '';
+  $('find').value = '';
+  currentTeamId = null;
+  renderDirectory();
+};
+$('team').onchange = () => {
+  const id = $('team').value;
+  $('find').value = '';
+  if (id) guard(loadRoster)(+id);
+  else renderDirectory($('division').value);
+};
+$('season').onchange = guard(async () => {
+  await Promise.all([loadTeams($('season').value), loadPlayerIndex($('season').value)]);
+  if (currentView === 'roster' && currentTeamId) guard(loadRoster)(currentTeamId);
+  else renderDirectory($('division').value);
+});
+
+$('out').onclick = e => {
+  const th = e.target.closest('thead th[data-key]');
+  if (th) {
+    const { key, tbl } = th.dataset;
+    const same = sortState.table === tbl && sortState.key === key;
+    sortState = { table: tbl, key, dir: same ? -sortState.dir : 1 };
+    if (tbl === 'roster') paintRoster(); else paintSearch();
+    return;
+  }
+  const tr = e.target.closest('tbody tr');
+  if (!tr || tr.classList.contains('group') || !tr.dataset.pid) return;
+  openPlayerModal(tr.dataset.pid);
+};
+$('modalClose').onclick = closeModal;
+$('modalDownloadBat').onclick = () => downloadGraphic('bat');
+$('modalDownloadPit').onclick = () => downloadGraphic('pit');
+$('modalBackdrop').onclick = e => { if (e.target.id === 'modalBackdrop') closeModal(); };
+document.onkeydown = e => { if (e.key === 'Escape' && !$('modalBackdrop').hidden) closeModal(); };
+$('openDisplay').onclick = () => {
+  const url = new URL(location.href);
+  url.searchParams.set('display', '1');
+  // if the relay answered our last push, hand the display view the same route
+  if ($('feedChip').classList.contains('live')) url.searchParams.set('src', 'server');
+  window.open(url.href, '_blank');
+};
+$('onairClear').onclick = clearOnAir;
+$('modalExitOnAir').onclick = () => {
+  clearOnAir();
+  $('modalDlNote').textContent = 'Removed from OBS ✓';
+};
+
+const yr = new Date().getFullYear();
+if (isDisplayMode) {
+  initDisplay();
+} else {
+  $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
+  // one silent probe so the Relay chip is honest before the first player is pushed
+  fetch(RELAY + '/state?t=' + Date.now(), { cache: 'no-store' }).then(() => setFeed(true)).catch(() => setFeed(false));
+  guard(async () => {
+    say('Loading teams…');
+    await Promise.all([loadTeams($('season').value), loadPlayerIndex($('season').value)]);
+    say('');
+    renderDirectory();
+  })();
+}
+</script>
+</body>
+</html>

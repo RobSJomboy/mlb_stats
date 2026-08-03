@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# baked-out graphics — regenerate them from the app, don't commit them
+*-lower-third.png
