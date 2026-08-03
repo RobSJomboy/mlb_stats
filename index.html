@@ -717,12 +717,43 @@ let modalBat = null, modalPit = null;  // currently-loaded stat objects for the 
 // season, byDateRange, and the vs-L/R splits — carries the raw counts to derive it ourselves.
 const kPct = (k, denom) => denom ? (k / denom * 100).toFixed(1) + '%' : '–';
 
+// "No stats for this range" reads like the tool broke. Nine times out of ten the player is just
+// on the IL, so the block gets annotated with when they last played once we've looked it up.
+function emptyBlock(group) {
+  return `<div class="modal-empty" id="empty-${group}">No ${group} stats for this range.</div>`;
+}
+
+function prettyDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);          // built by parts: parsing the raw string
+  return new Date(y, m - 1, d)                            // treats it as UTC and can slip a day
+    .toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+async function lastGameDate(pid, group, year) {
+  try {
+    const d = await jc(`${API}/people/${pid}/stats?stats=gameLog&season=${year}&group=${group}`);
+    const sec = (d.stats || [])[0];
+    if (!sec || !sec.splits || !sec.splits.length) return null;
+    return sec.splits[sec.splits.length - 1].date || null;  // gameLog comes back oldest-first
+  } catch { return null; }
+}
+
+async function annotateEmpty(pid, group, tf, year) {
+  if (tf === 'season') return;
+  const date = await lastGameDate(pid, group, year);
+  const box = $(`empty-${group}`);
+  if (!box || modalPid !== pid || modalTf !== tf) return;   // moved on while we were looking it up
+  box.textContent = date
+    ? `No games in this range — last played ${prettyDate(date)}.`
+    : `No ${group} games this season.`;
+}
+
 function statGrid(pairs) {
   return `<div class="stat-grid">` + pairs.map(([k, v]) =>
     `<div class="cell"><div class="v">${v != null && v !== '' ? v : '–'}</div><div class="k">${k}</div></div>`).join('') + `</div>`;
 }
 function apiBattingBlock(st) {
-  if (!st) return `<div class="modal-empty">No hitting stats for this range.</div>`;
+  if (!st) return emptyBlock('hitting');
   const cells = [['HR', st.homeRuns], ['RBI', st.rbi], ['BB', st.baseOnBalls],
                  ['K', st.strikeOuts], ['SB', st.stolenBases], ['HBP', st.hitByPitch],
                  ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
@@ -731,7 +762,7 @@ function apiBattingBlock(st) {
     + statGrid(cells);
 }
 function apiPitchingBlock(st) {
-  if (!st) return `<div class="modal-empty">No pitching stats for this range.</div>`;
+  if (!st) return emptyBlock('pitching');
   return `<div class="modal-line">${st.inningsPitched} IP · ${st.era} ERA · ${st.wins}-${st.losses}</div>`
     + statGrid([['WHIP', st.whip], ['K', st.strikeOuts], ['BB', st.baseOnBalls],
                 ['SV', st.saves], ['ER', st.earnedRuns], ['K%', kPct(st.strikeOuts, st.battersFaced)]]);
@@ -739,7 +770,7 @@ function apiPitchingBlock(st) {
 // vs-lefties/vs-righties pitching splits come back as a "batters faced" line, not a game record —
 // no ERA, no W-L, no saves (those aren't a real concept split by opposing-batter handedness).
 function apiPitchingSplitBlock(st) {
-  if (!st) return `<div class="modal-empty">No pitching stats for this range.</div>`;
+  if (!st) return emptyBlock('pitching');
   return `<div class="modal-hitline">${st.hits}-for-${st.atBats} allowed</div>`
     + `<div class="modal-line">${st.inningsPitched} IP · ${st.whip} WHIP · ${st.avg} BAA</div>`
     + statGrid([['K', st.strikeOuts], ['BB', st.baseOnBalls], ['HR', st.homeRuns],
@@ -822,6 +853,9 @@ async function loadModalStats() {
 
   $('modalDownloadBat').hidden = !(bat && +bat.atBats > 0);
   $('modalDownloadPit').hidden = !(pit && (+pit.outs > 0 || +pit.battersFaced > 0 || +pit.gamesPlayed > 0));
+
+  if (doBat && !bat) annotateEmpty(pid, 'hitting', tf, year);
+  if (doPit && !pit) annotateEmpty(pid, 'pitching', tf, year);
 
   autoPushOnAir();
 }
@@ -1082,11 +1116,24 @@ function autoPushOnAir() {
   if (wantsPitching(modalRow) && !wantsBatting(modalRow)) {
     const data = pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
     if (data) pushOnAir(modalPid, 'pit', modalRow, data);
+    else dropStaleOnAir();
   } else {
     const batData = battingGraphicData(modalBat, tfLabel(modalTf, year, 'hitting'));
     const data = batData || pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
     if (data) pushOnAir(modalPid, data === batData ? 'bat' : 'pit', modalRow, data);
+    else dropStaleOnAir();
   }
+}
+
+// The selected timeframe has nothing for this player — an IL guy on "Last 7 Days", say. Without
+// this the push is skipped and the bar just keeps whatever was up before, so the graphic sits
+// there showing SEASON numbers under a LAST 7 DAYS click with nothing on screen to say so. On a
+// live show that's worse than an empty bar, so pull it down and be loud about why.
+function dropStaleOnAir() {
+  if (String(onAirPid) !== String(modalPid)) return;   // someone else is on air; leave them alone
+  clearOnAir();
+  const note = $('modalDlNote');
+  if (note) note.textContent = `Nothing to show for ${tfLabel(modalTf, $('season').value)} — pulled off air`;
 }
 
 // matches the CSS transition duration on .lt-bar, so a player-to-player swap fades the old one
