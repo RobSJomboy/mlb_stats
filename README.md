@@ -41,6 +41,33 @@ network call, the index is loaded up front.
 Hitters get AVG/OBP/SLG/OPS plus HR, RBI, BB, K, SB, HBP and K%. Pitchers get IP/ERA/W-L plus WHIP,
 K, BB, SV, ER, K%. Two-way players get both.
 
+**Team stats** — from a team's roster, hit **■ Team Stats — Ranks & Splits**. Four categories, each
+showing the club's season numbers *and* where they rank in all 30:
+
+| Category | Stats |
+|---|---|
+| Team Batting | AVG, OBP, SLG, OPS, R, HR |
+| Starting Pitching | ERA, WHIP, K, BAA, IP |
+| Relief Pitching | ERA, WHIP, SV, K, BAA |
+| Team Defense | FLD%, E, DP, CS% |
+
+Ranks are computed here from all 30 clubs rather than trusting a sort parameter to mean what we
+want, and the direction is per-category — `strikeOuts` is good for a staff and bad for a lineup,
+and `avg` is the batting average in a hitting split but the average *against* in a pitching one.
+Ties share a rank.
+
+**Cycling** — both the player card and the team card have a **Cycle** checkbox and a seconds box
+(default 7). On, the graphic rotates through every split or category; off, whatever you've selected
+stays up indefinitely. Splits with no data are dropped rather than cycled as blank screens, so an
+IL player cycles the three that exist instead of six with three empty.
+
+The display does the rotating on a local timer — one publish drives a whole rotation. A 7-second
+cycle isn't nine posts a minute at ntfy, and the pacing stays smooth regardless of network jitter.
+
+**● DISPLAY LIVE / ■ OFF AIR** in the header is a master kill switch. Click it from anywhere to pull
+the lower third without first digging back into whichever player or team is up. The card set stays
+loaded, so clicking back to LIVE puts the same graphic straight back on screen.
+
 **Season picker** goes back to 2014.
 
 ---
@@ -177,3 +204,8 @@ Shared with the rest of the Talkin' Baseball tools:
 - Older seasons work, but the roster shown is the current 40-man, not that year's.
 - **The overlay holds its last frame if the network drops.** A failed poll is ignored rather than
   blanking the bar, so a brief wifi hiccup doesn't yank a graphic off air mid-sentence.
+- **Identical content never re-renders.** The same message arrives twice by design — SSE delivers
+  it and the polling safety net delivers it again — and the load backfill replays several at once.
+  Every payload is fingerprinted (excluding its timestamp) and duplicates are dropped before they
+  touch the DOM. Without that guard each duplicate restarted the fade, which showed up as a
+  graphic flickering while it just sat there.

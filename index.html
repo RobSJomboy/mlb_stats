@@ -183,6 +183,26 @@
   .modal-dlnote{color:var(--text3);font-size:10px;font-family:var(--font-mono);text-align:right;
     margin-top:10px;min-height:14px}
 
+  /* ---- master on-air switch + cycle controls ---- */
+  .air-btn{border-radius:20px;padding:8px 18px;font-family:var(--font-display);font-size:17px;
+    letter-spacing:.06em;border:1px solid var(--border2);background:var(--surface);color:var(--text2)}
+  .air-btn.on{background:var(--red);border-color:var(--red);color:#fff}
+  .air-btn.on:hover{background:#ff8585;border-color:#ff8585;color:#fff}
+  .air-btn:not(.on){color:var(--text2)}
+  .air-btn:not(.on):hover{border-color:var(--gold);color:var(--gold)}
+
+  .cycle-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 16px;
+    padding:9px 12px;background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius)}
+  .cycle-row label{display:flex;align-items:center;gap:7px;margin:0;color:var(--gold);cursor:pointer}
+  .cycle-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:pointer}
+  .cycle-row input[type=number]{width:58px;padding:5px 7px;font-family:var(--font-mono);font-size:13px}
+  .cycle-row .sec{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--text3)}
+
+  .teamstats-btn{background:var(--gold);color:var(--navy-dark);border:1px solid var(--gold);
+    font-family:var(--font-display);font-size:16px;letter-spacing:.06em;padding:7px 16px;margin-bottom:10px}
+  .teamstats-btn:hover{background:#ffdc9b;border-color:#ffdc9b;color:var(--navy-dark)}
+
   /* ---- control page: on-air status chip ---- */
   .onair{display:flex;align-items:center;gap:10px;margin-top:14px;font-family:var(--font-mono);
     font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase}
@@ -250,6 +270,8 @@
   .lt-bar.lt-visible{opacity:1}
   .lt-headshot{width:152px;height:152px;border-radius:50%;object-fit:cover;background:#173a56;
     border:4px solid #fbcc7a;flex:none}
+  /* a club crest needs the whole shape visible on a light disc, not cropped to fill like a face */
+  .lt-headshot.team{object-fit:contain;background:#f5f7fa;padding:16px}
   .lt-info{flex:none;min-width:0}
   .lt-name{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:68px;line-height:1;
     letter-spacing:.02em;color:#ffffff;white-space:nowrap}
@@ -283,6 +305,8 @@
   <div class="titlerow">
     <h1>TRADE SNAPSHOT<span>.</span></h1>
     <button id="goHome" class="home-btn" type="button" title="Back to all 30 teams">⌂ All Teams</button>
+    <button id="airToggle" class="air-btn on" type="button"
+      title="Click to take the lower third off air">● DISPLAY LIVE</button>
     <div class="teambadge" id="teambadge"></div>
   </div>
   <div class="controls">
@@ -331,6 +355,11 @@
       </div>
     </div>
     <div class="tf-pills" id="tfPills"></div>
+    <div class="cycle-row">
+      <label><input type="checkbox" id="playerCycle"> Cycle all splits</label>
+      <input type="number" id="cycleSecs" value="7" min="2" max="60" step="1">
+      <span class="sec">sec each</span>
+    </div>
     <div id="modalBody" class="modal-body"></div>
     <div class="modal-export-row" id="modalExportRow">
       <button id="modalDownloadBat" class="modal-export-btn" type="button" hidden
@@ -341,6 +370,31 @@
         title="Remove the lower third from OBS">✕ Exit Lower Third</button>
     </div>
     <div id="modalDlNote" class="modal-dlnote"></div>
+  </div>
+</div>
+
+<div id="teamModalBackdrop" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="teamModalName">
+    <button id="teamModalClose" class="modal-close" type="button" aria-label="Close">×</button>
+    <div class="modal-head">
+      <img id="teamModalLogo" class="modal-headshot" alt="" style="object-fit:contain;padding:9px;background:#f5f7fa">
+      <div>
+        <div class="modal-name" id="teamModalName"></div>
+        <div class="modal-sub" id="teamModalSub"></div>
+      </div>
+    </div>
+    <div class="tf-pills" id="teamPills"></div>
+    <div class="cycle-row">
+      <label><input type="checkbox" id="teamCycle"> Cycle all categories</label>
+      <input type="number" id="teamCycleSecs" value="7" min="2" max="60" step="1">
+      <span class="sec">sec each</span>
+    </div>
+    <div id="teamModalBody" class="modal-body"></div>
+    <div class="modal-export-row">
+      <button id="teamExitOnAir" class="exit-btn" type="button"
+        title="Remove the lower third from OBS">✕ Exit Lower Third</button>
+    </div>
+    <div id="teamDlNote" class="modal-dlnote"></div>
   </div>
 </div>
 
@@ -620,12 +674,16 @@ function paintRoster() {
     });
   });
   table.appendChild(tbody);
-  addTable(`${team ? team.name : 'Team'} Roster — ${year}`, table);
+  const btn = el('button', 'teamstats-btn', '\u25a0 Team Stats \u2014 Ranks & Splits');
+  btn.type = 'button';
+  btn.onclick = () => { if (team) guard(openTeamModal)(team.id); };
+  addTable(`${team ? team.name : 'Team'} Roster — ${year}`, table, null, team ? btn : null);
 }
 
-function addTable(title, table, note) {
+function addTable(title, table, note, actions) {
   const out = $('out'); out.innerHTML = '';
   out.appendChild(el('h2', null, title));
+  if (actions) out.appendChild(actions);
   if (note) out.appendChild(el('div', 'metanote', note));
   if (table) { const w = el('div', 'wrap'); w.appendChild(table); out.appendChild(w); }
 }
@@ -1002,8 +1060,6 @@ async function renderLowerThird(data, row, pid) {
 
 // ---- on-air: push a player's stat line to the OBS display view (control side) ----
 
-let onAirPid = null, onAirKind = null;
-
 function relayPost(payload) {
   // fire-and-forget: the relay is optional, so a failure here is just "no server running"
   fetch(relayURL('/state'), {
@@ -1081,48 +1137,122 @@ function copyText(text) {
   });
 }
 
-function pushOnAir(pid, kind, row, data) {
-  if (!row || !data) return;
-  onAirPid = pid; onAirKind = kind;
-  const payload = { pid, kind, name: row.name, pos: row.pos, team: row.team, data, ts: Date.now() };
-  try { localStorage.setItem(LT_KEY, JSON.stringify(payload)); } catch {}
-  if (ltChannel) ltChannel.postMessage(payload);
+// ---- control side: one card set, one broadcast --------------------------------------------
+// airLive is the master switch. Turning it off keeps the card set loaded so flipping back on
+// puts the same graphic straight up — that's the point of a kill switch you can hit from
+// anywhere without first digging back into whichever player or team is on air.
+let airLive = true;
+let onAirCards = [], onAirCycle = false, onAirIndex = 0, onAirSource = null;
+let cycleSecs = 7;
+
+const cardFromData = (kind, id, name, sub, data) =>
+  ({ kind, id, name, sub, label: data.label, hitLine: data.hitLine, cells: data.cells });
+
+function broadcast() {
+  const payload = onAirCards.length ? {
+    v: 2, live: airLive, cards: onAirCards, index: onAirIndex,
+    cycle: onAirCycle, intervalMs: cycleSecs * 1000, ts: Date.now(),
+  } : null;
+  try {
+    if (payload) localStorage.setItem(LT_KEY, JSON.stringify(payload));
+    else localStorage.removeItem(LT_KEY);
+  } catch {}
+  if (ltChannel) ltChannel.postMessage(payload || { clear: true });
   publishTopic(payload);
   relayPost(payload);
   updateOnAirUI(payload);
 }
 
+function pushCards(cards, opts) {
+  const o = opts || {};
+  if (!cards || !cards.length) return;
+  onAirCards = cards;
+  onAirCycle = !!o.cycle;
+  onAirIndex = o.index || 0;
+  onAirSource = o.source || null;
+  broadcast();
+}
+
 function clearOnAir() {
-  onAirPid = onAirKind = null;
-  try { localStorage.removeItem(LT_KEY); } catch {}
-  if (ltChannel) ltChannel.postMessage({ clear: true });
-  publishTopic(null);
-  relayPost(null);
-  updateOnAirUI(null);
+  onAirCards = []; onAirCycle = false; onAirIndex = 0; onAirSource = null;
+  broadcast();
+}
+
+function setAirLive(live) {
+  airLive = !!live;
+  const b = $('airToggle');
+  if (b) {
+    b.classList.toggle('on', airLive);
+    b.textContent = airLive ? '\u25cf DISPLAY LIVE' : '\u25a0 OFF AIR';
+    b.title = airLive ? 'Click to take the lower third off air' : 'Click to put the lower third back on air';
+  }
+  broadcast();
 }
 
 function updateOnAirUI(payload) {
   const box = $('onair'); if (!box) return;
   box.hidden = !payload;
-  if (payload) $('onairText').innerHTML = `On air: <b>${payload.name}</b> · ${payload.data.label}`;
+  if (!payload) return;
+  const c = payload.cards[payload.index] || payload.cards[0];
+  const cycling = payload.cycle && payload.cards.length > 1
+    ? ` \u00b7 cycling ${payload.cards.length} every ${cycleSecs}s` : '';
+  const off = payload.live ? '' : ' \u00b7 OFF AIR';
+  $('onairText').innerHTML = `On air: <b>${c.name}</b> \u00b7 ${c.label}${cycling}${off}`;
 }
 
-// Whenever the modal opens or the timeframe changes, auto-push whichever line is primary
-// (hitting for position players, pitching for pitchers) so the OBS bar always tracks what's on screen.
-function autoPushOnAir() {
-  if (!modalPid || !modalRow) return;
-  const year = $('season').value;
-  const pitFn = isSplitTf(modalTf) ? pitchingSplitGraphicData : pitchingGraphicData;
-  if (wantsPitching(modalRow) && !wantsBatting(modalRow)) {
-    const data = pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
-    if (data) pushOnAir(modalPid, 'pit', modalRow, data);
-    else dropStaleOnAir();
-  } else {
-    const batData = battingGraphicData(modalBat, tfLabel(modalTf, year, 'hitting'));
-    const data = batData || pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
-    if (data) pushOnAir(modalPid, data === batData ? 'bat' : 'pit', modalRow, data);
-    else dropStaleOnAir();
+// Build the card for one timeframe of one player: hitting for position players, pitching for
+// pitchers, whichever exists for two-way guys.
+function playerCard(row, pid, bat, pit, tf, year) {
+  const pitFn = isSplitTf(tf) ? pitchingSplitGraphicData : pitchingGraphicData;
+  const sub = [row.pos, row.team].filter(Boolean).join('  \u00b7  ');
+  if (wantsPitching(row) && !wantsBatting(row)) {
+    const d = pitFn(pit, tfLabel(tf, year, 'pitching'));
+    return d ? cardFromData('player', pid, row.name, sub, d) : null;
   }
+  const b = battingGraphicData(bat, tfLabel(tf, year, 'hitting'));
+  const d = b || pitFn(pit, tfLabel(tf, year, 'pitching'));
+  return d ? cardFromData('player', pid, row.name, sub, d) : null;
+}
+
+// Every timeframe that actually has data, in pill order — the card set behind "cycle splits".
+// Empty ones are dropped rather than shown blank: an IL guy would otherwise cycle through four
+// screens of nothing.
+async function buildPlayerCardSet(pid, row, year) {
+  const doBat = wantsBatting(row), doPit = wantsPitching(row);
+  const results = await Promise.all(TF.map(async ([tf]) => {
+    const [bat, pit] = await Promise.all([
+      doBat ? fetchStat(pid, 'hitting', tf, year).catch(() => null) : null,
+      doPit ? fetchStat(pid, 'pitching', tf, year).catch(() => null) : null,
+    ]);
+    return playerCard(row, pid, bat, pit, tf, year);
+  }));
+  return results.filter(Boolean);
+}
+
+// Whenever the modal opens or the timeframe changes, push whichever line is primary so the OBS
+// bar always tracks what's on screen. With cycling on, push the whole set instead.
+async function autoPushOnAir() {
+  if (!modalPid || !modalRow) return;
+  const pid = modalPid, row = modalRow, tf = modalTf;
+  const year = $('season').value;
+
+  if (playerCycleOn()) {
+    const note = $('modalDlNote');
+    if (note) note.textContent = 'Building split cycle\u2026';
+    const cards = await buildPlayerCardSet(pid, row, year);
+    if (modalPid !== pid) return;                       // moved on while we were fetching
+    if (!cards.length) return dropStaleOnAir();
+    // start on the pill he's looking at, if that one has data
+    const at = Math.max(0, cards.findIndex(c => c.label === tfLabel(tf, year, 'hitting')
+                                             || c.label === tfLabel(tf, year, 'pitching')));
+    pushCards(cards, { cycle: true, index: at, source: 'player:' + pid });
+    if (note) note.textContent = `Cycling ${cards.length} splits every ${cycleSecs}s`;
+    return;
+  }
+
+  const card = playerCard(row, pid, modalBat, modalPit, tf, year);
+  if (card) pushCards([card], { cycle: false, source: 'player:' + pid });
+  else dropStaleOnAir();
 }
 
 // The selected timeframe has nothing for this player — an IL guy on "Last 7 Days", say. Without
@@ -1130,7 +1260,7 @@ function autoPushOnAir() {
 // there showing SEASON numbers under a LAST 7 DAYS click with nothing on screen to say so. On a
 // live show that's worse than an empty bar, so pull it down and be loud about why.
 function dropStaleOnAir() {
-  if (String(onAirPid) !== String(modalPid)) return;   // someone else is on air; leave them alone
+  if (onAirSource !== 'player:' + modalPid) return;   // someone else is on air; leave them alone
   clearOnAir();
   const note = $('modalDlNote');
   if (note) note.textContent = `Nothing to show for ${tfLabel(modalTf, $('season').value)} — pulled off air`;
@@ -1142,40 +1272,98 @@ const LT_FADE_MS = 350;
 let ltFadeTimer = null;
 let ltVisible = false;
 
-function paintOnAirBar(payload) {
-  const { name, pos, team, data } = payload;
-  $('ltHeadshot').src = headshotURL(payload.pid);
-  $('ltName').textContent = name.toUpperCase();
-  $('ltSub').textContent = [pos, team].filter(Boolean).join('  ·  ').toUpperCase();
+// ---- what the bar is currently showing -------------------------------------------------------
+// A card is one screenful: {kind:'player'|'team', id, name, sub, label, hitLine, cells}. The
+// payload carries a whole set plus a cycle flag, and the DISPLAY does the rotating on a local
+// timer. One publish drives an entire rotation, so a 7-second cycle isn't 9 posts a minute at
+// ntfy — and the timing stays smooth regardless of network jitter.
+let ltState = { cards: [], index: 0, cycle: false, intervalMs: 7000, live: true };
+let ltCycleTimer = null;
+let ltSig = null;
+
+function normalizePayload(p) {
+  if (!p || p.clear) return null;
+  if (Array.isArray(p.cards)) return p;
+  // a v1 payload — an OBS Browser Source running a cached copy of the old page can still send
+  // these, and mid-show is the worst time to find out the shapes don't match
+  if (p.data && p.pid) return {
+    live: true, cycle: false, index: 0, intervalMs: 7000,
+    cards: [{ kind: 'player', id: p.pid, name: p.name,
+              sub: [p.pos, p.team].filter(Boolean).join('  \u00b7  '),
+              label: p.data.label, hitLine: p.data.hitLine, cells: p.data.cells }],
+  };
+  return null;
+}
+
+// Everything that affects what's on screen, and nothing else. `ts` is deliberately excluded:
+// it changes on every publish, and including it would defeat the whole point of the guard.
+function payloadSig(p) {
+  return p ? JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards]) : 'OFF';
+}
+
+function paintCard(card) {
+  const img = $('ltHeadshot');
+  img.src = card.kind === 'team' ? logoURL(card.id) : headshotURL(card.id);
+  img.classList.toggle('team', card.kind === 'team');
+  $('ltName').textContent = (card.name || '').toUpperCase();
+  $('ltSub').textContent = (card.sub || '').toUpperCase();
   const hitEl = $('ltHitline');
-  const splitText = data.label ? data.label.toUpperCase() : '';
-  const subText = data.hitLine ? data.hitLine.toUpperCase() : '';
-  hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  ·  ' + subText : ''}` : '';
+  const splitText = card.label ? card.label.toUpperCase() : '';
+  const subText = card.hitLine ? card.hitLine.toUpperCase() : '';
+  hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  \u00b7  ' + subText : ''}` : '';
   hitEl.style.display = splitText ? '' : 'none';
-  $('ltCells').innerHTML = data.cells.map(([label, value]) =>
+  $('ltCells').innerHTML = (card.cells || []).map(([label, value]) =>
     `<div class="lt-cell"><div class="v">${value}</div><div class="k">${label}</div></div>`).join('');
-  sizeCells(data.cells.length);
+  sizeCells((card.cells || []).length);
   $('ltBar').classList.add('lt-visible');
   ltVisible = true;
 }
 
-function renderOnAirBar(payload) {
+// Cross-fades to a card: fade the old one fully out before swapping content, so a change is
+// never an instant content pop. Only used when something is already on screen.
+function swapToCard(i) {
+  const card = ltState.cards[i];
+  if (!card) return;
+  clearTimeout(ltFadeTimer);
+  if (ltVisible) {
+    $('ltBar').classList.remove('lt-visible');
+    ltFadeTimer = setTimeout(() => paintCard(card), LT_FADE_MS);
+  } else {
+    paintCard(card);
+  }
+}
+
+function renderOnAirBar(raw) {
   const bar = $('ltBar');
   if (!bar) return;
+  const p = normalizePayload(raw);
+  const sig = payloadSig(p);
+  // The same message arrives twice by design — SSE delivers it and the polling safety net
+  // delivers it again — and the load backfill replays several at once. Without this guard each
+  // duplicate restarted the fade, which is the flicker you see on a graphic that's just sitting
+  // there. Identical content must never touch the DOM.
+  if (sig === ltSig) return;
+  ltSig = sig;
+
+  clearInterval(ltCycleTimer); ltCycleTimer = null;
   clearTimeout(ltFadeTimer);
 
-  if (!payload) {
-    bar.classList.remove('lt-visible');  // fades out via the CSS transition, content stays as-is underneath
+  if (!p || !p.live || !p.cards || !p.cards.length) {
+    bar.classList.remove('lt-visible');   // fades out; content stays underneath
     ltVisible = false;
     return;
   }
 
-  if (ltVisible) {
-    // already on screen with someone else — fade that out first, then swap content and fade the new one in
-    bar.classList.remove('lt-visible');
-    ltFadeTimer = setTimeout(() => paintOnAirBar(payload), LT_FADE_MS);
-  } else {
-    paintOnAirBar(payload);
+  ltState = { cards: p.cards, index: p.index || 0, cycle: !!p.cycle,
+              intervalMs: p.intervalMs || 7000, live: true };
+  swapToCard(ltState.index);
+
+  if (ltState.cycle && ltState.cards.length > 1) {
+    const every = Math.max(2000, ltState.intervalMs);
+    ltCycleTimer = setInterval(() => {
+      ltState.index = (ltState.index + 1) % ltState.cards.length;
+      swapToCard(ltState.index);
+    }, every);
   }
 }
 
@@ -1212,7 +1400,7 @@ function initTopicDisplay() {
     if (!envelope || !envelope.message) return;
     try {
       const s = JSON.parse(envelope.message);
-      renderOnAirBar(s && !s.clear && s.pid ? s : null);
+      renderOnAirBar(s);
     } catch { /* ignore malformed payload */ }
   };
 
@@ -1261,7 +1449,7 @@ function initDisplay() {
         const ts = s && s.ts != null ? s.ts : null;
         if (ts !== lastTs) {
           lastTs = ts;
-          renderOnAirBar(s && !s.clear && s.pid ? s : null);
+          renderOnAirBar(s);
         }
       } catch {}
     };
@@ -1273,7 +1461,7 @@ function initDisplay() {
     const cached = JSON.parse(localStorage.getItem(LT_KEY) || 'null');
     if (cached) renderOnAirBar(cached);
   } catch {}
-  if (ltChannel) ltChannel.onmessage = e => renderOnAirBar(e.data && e.data.clear ? null : e.data);
+  if (ltChannel) ltChannel.onmessage = e => renderOnAirBar(e.data);
   window.addEventListener('storage', e => {
     if (e.key !== LT_KEY) return;
     try { renderOnAirBar(e.newValue ? JSON.parse(e.newValue) : null); } catch {}
@@ -1292,7 +1480,8 @@ async function downloadGraphic(kind) {  // kind: 'bat' | 'pit'
 
   btn.disabled = true; note.textContent = `Building graphic…`;
   try {
-    pushOnAir(pid, kind, row, data);
+    pushCards([cardFromData('player', pid, row.name, [row.pos, row.team].filter(Boolean).join('  \u00b7  '), data)],
+              { cycle: false, source: 'player:' + pid });
     const { canvas, hadPhoto } = await renderLowerThird(data, row, pid);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('Canvas export failed');
@@ -1307,6 +1496,159 @@ async function downloadGraphic(kind) {  // kind: 'bat' | 'pit'
     btn.disabled = false;
   }
 }
+
+// =====================================================================================
+// Team stats — season totals plus where the club ranks in all 30, by category
+// =====================================================================================
+
+// dir: +1 means a bigger number is better, -1 means smaller is better. It has to be per-category,
+// not per-field: `strikeOuts` is good for a pitching staff and bad for a lineup, and `avg` is the
+// batting average in a hitting split but the average AGAINST in a pitching one.
+const TEAM_SPECS = [
+  { key: 'batting', label: 'TEAM BATTING', group: 'hitting', sit: null,
+    cells: [['AVG','avg',1], ['OBP','obp',1], ['SLG','slg',1], ['OPS','ops',1], ['R','runs',1], ['HR','homeRuns',1]] },
+  { key: 'sp', label: 'STARTING PITCHING', group: 'pitching', sit: 'sp',
+    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['BAA','avg',-1], ['IP','inningsPitched',1]] },
+  { key: 'rp', label: 'RELIEF PITCHING', group: 'pitching', sit: 'rp',
+    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['SV','saves',1], ['K','strikeOuts',1], ['BAA','avg',-1]] },
+  { key: 'def', label: 'TEAM DEFENSE', group: 'fielding', sit: null,
+    cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1], ['CS%','caughtStealingPercentage',1]] },
+];
+
+const ordinal = n => {
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+// One request per category returns all 30 clubs, so ranks are computed here rather than trusting
+// a sortStat parameter to mean what we want.
+async function fetchTeamGroup(spec, year) {
+  const url = spec.sit
+    ? `${API}/teams/stats?season=${year}&group=${spec.group}&stats=statSplits&sitCodes=${spec.sit}&sportIds=1`
+    : `${API}/teams/stats?season=${year}&group=${spec.group}&stats=season&sportIds=1`;
+  const d = await jc(url);
+  const sec = (d.stats || [])[0];
+  return (sec && sec.splits) || [];
+}
+
+// Ties share a rank (two clubs at 3.40 ERA are both 4th, next is 6th) — the alternative silently
+// invents an ordering between two identical numbers.
+function rankMap(splits, field, dir) {
+  const vals = splits
+    .map(sp => ({ id: sp.team && sp.team.id, v: parseFloat(sp.stat[field]) }))
+    .filter(x => x.id != null && !Number.isNaN(x.v));
+  vals.sort((a, b) => (b.v - a.v) * dir);
+  const out = new Map();
+  vals.forEach((x, i) => {
+    if (i && x.v === vals[i - 1].v) out.set(x.id, out.get(vals[i - 1].id));
+    else out.set(x.id, i + 1);
+  });
+  return out;
+}
+
+async function teamRecord(teamId, year) {
+  try {
+    const d = await jc(`${API}/standings?leagueId=103,104&season=${year}&standingsTypes=regularSeason`);
+    for (const rec of (d.records || []))
+      for (const tr of (rec.teamRecords || []))
+        if (tr.team && tr.team.id === +teamId) return `${tr.wins}-${tr.losses}`;
+  } catch {}
+  return '';
+}
+
+// Returns one card per category, cells labelled with the club's rank: "ERA · 4TH".
+async function buildTeamCardSet(teamId, teamName, year) {
+  const [record, groups] = await Promise.all([
+    teamRecord(teamId, year),
+    Promise.all(TEAM_SPECS.map(spec => fetchTeamGroup(spec, year).catch(() => []))),
+  ]);
+  const cards = [];
+  TEAM_SPECS.forEach((spec, gi) => {
+    const splits = groups[gi];
+    const mine = splits.find(sp => sp.team && sp.team.id === +teamId);
+    if (!mine) return;
+    const cells = spec.cells.map(([label, field, dir]) => {
+      const raw = mine.stat[field];
+      if (raw == null || raw === '') return null;
+      const rank = rankMap(splits, field, dir).get(+teamId);
+      return [rank ? `${label} \u00b7 ${ordinal(rank)}` : label, String(raw)];
+    }).filter(Boolean);
+    if (!cells.length) return;
+    cards.push({ kind: 'team', id: +teamId, name: teamName,
+                 sub: `${year} \u00b7 RANK OF 30`, label: `${year} ${spec.label}`,
+                 hitLine: record, cells, specKey: spec.key });
+  });
+  return cards;
+}
+
+// =====================================================================================
+// Team stats modal
+// =====================================================================================
+
+let teamModalId = null, teamModalName = '', teamCards = [], teamSpecKey = 'batting';
+
+const playerCycleOn = () => !!($('playerCycle') && $('playerCycle').checked);
+const teamCycleOn = () => !!($('teamCycle') && $('teamCycle').checked);
+
+async function openTeamModal(teamId) {
+  const team = teamsById.get(+teamId);
+  if (!team) return;
+  teamModalId = +teamId; teamModalName = team.name; teamCards = [];
+  const year = $('season').value;
+  $('teamModalLogo').src = logoURL(team.id);
+  $('teamModalName').textContent = team.name;
+  $('teamModalSub').textContent = `${year} · ${divShort(team.division.name)}`;
+  $('teamDlNote').textContent = '';
+  $('teamPills').innerHTML = '';
+  $('teamModalBody').innerHTML = '<div class="modal-empty">Loading team stats…</div>';
+  $('teamModalBackdrop').hidden = false;
+
+  const cards = await buildTeamCardSet(teamId, team.name, year);
+  if (teamModalId !== +teamId) return;          // switched teams while loading
+  teamCards = cards;
+  if (!cards.length) {
+    $('teamModalBody').innerHTML = '<div class="modal-empty">No team stats for this season yet.</div>';
+    return;
+  }
+  if (!cards.some(c => c.specKey === teamSpecKey)) teamSpecKey = cards[0].specKey;
+  paintTeamPills();
+  paintTeamBody();
+  pushTeamOnAir();
+}
+
+function paintTeamPills() {
+  const box = $('teamPills'); box.innerHTML = '';
+  teamCards.forEach(c => {
+    const b = el('button', 'tf-pill' + (c.specKey === teamSpecKey ? ' on' : ''), c.label.replace(/^\d+ /, ''));
+    b.type = 'button';
+    b.onclick = () => { teamSpecKey = c.specKey; paintTeamPills(); paintTeamBody(); pushTeamOnAir(); };
+    box.appendChild(b);
+  });
+}
+
+function paintTeamBody() {
+  const card = teamCards.find(c => c.specKey === teamSpecKey);
+  if (!card) { $('teamModalBody').innerHTML = '<div class="modal-empty">No stats in this category.</div>'; return; }
+  const grid = statGrid(card.cells.map(([k, v]) => [k, v]));
+  $('teamModalBody').innerHTML =
+    `<div class="modal-section"><h3>${card.label}</h3>` +
+    (card.hitLine ? `<div class="modal-hitline">${card.hitLine}</div>` : '') + grid + `</div>`;
+}
+
+function pushTeamOnAir() {
+  if (!teamCards.length) return;
+  if (teamCycleOn()) {
+    const at = Math.max(0, teamCards.findIndex(c => c.specKey === teamSpecKey));
+    pushCards(teamCards, { cycle: true, index: at, source: 'team:' + teamModalId });
+    $('teamDlNote').textContent = `Cycling ${teamCards.length} categories every ${cycleSecs}s`;
+  } else {
+    const card = teamCards.find(c => c.specKey === teamSpecKey);
+    if (card) pushCards([card], { cycle: false, source: 'team:' + teamModalId });
+    $('teamDlNote').textContent = '';
+  }
+}
+
+function closeTeamModal() { $('teamModalBackdrop').hidden = true; }
 
 // =====================================================================================
 // Wiring
@@ -1365,7 +1707,11 @@ $('modalClose').onclick = closeModal;
 $('modalDownloadBat').onclick = () => downloadGraphic('bat');
 $('modalDownloadPit').onclick = () => downloadGraphic('pit');
 $('modalBackdrop').onclick = e => { if (e.target.id === 'modalBackdrop') closeModal(); };
-document.onkeydown = e => { if (e.key === 'Escape' && !$('modalBackdrop').hidden) closeModal(); };
+document.onkeydown = e => {
+  if (e.key !== 'Escape') return;
+  if (!$('modalBackdrop').hidden) closeModal();
+  else if (!$('teamModalBackdrop').hidden) closeTeamModal();
+};
 $('openDisplay').onclick = () => {
   const url = new URL(location.href);
   url.searchParams.set('display', '1');
@@ -1422,6 +1768,25 @@ $('obsUrlCopy').onclick = () => {
     .catch(() => { btn.textContent = 'Select it'; })
     .finally(() => setTimeout(() => { btn.textContent = 'Copy'; }, 1600));
 };
+$('airToggle').onclick = () => setAirLive(!airLive);
+$('teamModalClose').onclick = closeTeamModal;
+$('teamModalBackdrop').onclick = e => { if (e.target.id === 'teamModalBackdrop') closeTeamModal(); };
+$('teamExitOnAir').onclick = () => { clearOnAir(); $('teamDlNote').textContent = 'Removed from OBS ✓'; };
+$('teamCycle').onchange = pushTeamOnAir;
+$('playerCycle').onchange = () => autoPushOnAir();
+
+// One seconds box drives both cycles; a change re-publishes so a live rotation picks up the new
+// pace immediately rather than at whatever interval it was already running.
+function onCycleSecsChange(e) {
+  const v = Math.min(60, Math.max(2, +e.target.value || 7));
+  cycleSecs = v;
+  $('cycleSecs').value = v; $('teamCycleSecs').value = v;
+  if (onAirCycle) { broadcast(); }
+  if (!$('teamModalBackdrop').hidden) pushTeamOnAir();
+}
+$('cycleSecs').onchange = onCycleSecsChange;
+$('teamCycleSecs').onchange = onCycleSecsChange;
+
 $('onairClear').onclick = clearOnAir;
 $('modalExitOnAir').onclick = () => {
   clearOnAir();
