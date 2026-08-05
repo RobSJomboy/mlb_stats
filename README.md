@@ -51,10 +51,11 @@ showing the club's season numbers *and* where they rank in all 30:
 | Relief Pitching | ERA, WHIP, SV, K, BAA |
 | Team Defense | FLD%, E, DP, CS% |
 
-Ranks are computed here from all 30 clubs rather than trusting a sort parameter to mean what we
-want, and the direction is per-category — `strikeOuts` is good for a staff and bad for a lineup,
-and `avg` is the batting average in a hitting split but the average *against* in a pitching one.
-Ties share a rank.
+On the graphic, the category is the headline and the crest identifies the club, with each stat
+carrying its rank underneath — `ERA / 3.47 / 3RD OF 30`. Ranks are computed here from all 30 clubs
+rather than trusting a sort parameter to mean what we want, and the direction is per-category:
+`strikeOuts` is good for a staff and bad for a lineup, and `avg` is the batting average in a hitting
+split but the average *against* in a pitching one. Ties share a rank.
 
 **Cycling** — both the player card and the team card have a **Cycle** checkbox and a seconds box
 (default 7). On, the graphic rotates through every split or category; off, whatever you've selected
@@ -202,6 +203,17 @@ Shared with the rest of the Talkin' Baseball tools:
 - **Stat responses are cached per URL for the session.** Clicking back to a timeframe you already
   looked at is instant; reload the page to force fresh numbers.
 - Older seasons work, but the roster shown is the current 40-man, not that year's.
+- **The background never animates on a stat change.** Only the content cross-fades, and the
+  headshot/crest only fades when the picture actually differs — cycling a team's categories keeps
+  the same crest, so fading it would read as a flicker on something that didn't change. The bar
+  itself only fades coming on air and going off.
+- **Cells scale to fill the bar, not just to fit.** Font size comes from the width each cell ends up
+  with, measured after layout and after Bebas Neue has loaded — measuring early or against a
+  fallback font is how you end up with 32px numbers in a 250px bar.
+- **Coming back from a hidden tab re-snaps the layers.** Browsers freeze CSS transitions in a hidden
+  tab, so a swap interrupted by hiding could resume with the content stuck transparent — background
+  on screen, no stats in it. Visibility changes force the resting state rather than trusting an
+  interrupted transition to have finished.
 - **The overlay holds its last frame if the network drops.** A failed poll is ignored rather than
   blanking the bar, so a brief wifi hiccup doesn't yank a graphic off air mid-sentence.
 - **Identical content never re-renders.** The same message arrives twice by design — SSE delivers

@@ -260,39 +260,52 @@
   /* always present in the DOM (it's position:absolute, so it never affects layout) — shown/hidden and
      swapped between players purely via opacity, so bringing it on, taking it off, or switching to a
      new player all get a smooth fade instead of an instant pop */
-  .lt-bar{display:flex;align-items:center;gap:24px;position:absolute;left:0;right:0;bottom:60px;
-    height:200px;padding:0 44px;background-color:#0d1f2d;
+  /* The background never animates. Only the figure and the body fade, and the figure only when
+     the picture actually changes — cycling a team's categories keeps the same crest, so fading it
+     would read as a flicker on something that didn't change. */
+  .lt-bar{display:flex;align-items:center;gap:26px;position:absolute;left:0;right:0;bottom:60px;
+    height:250px;padding:0 44px;background-color:#0d1f2d;
     background-image:linear-gradient(#fbcc7a,#fbcc7a),
       linear-gradient(90deg,#0d1f2d 0%,#173a56 55%,#0d2233 100%);
-    background-repeat:no-repeat,no-repeat;background-size:100% 6px,100% 100%;
+    background-repeat:no-repeat,no-repeat;background-size:100% 7px,100% 100%;
     background-position:top left,top left;
     box-sizing:border-box;opacity:0;pointer-events:none;transition:opacity .35s ease}
   .lt-bar.lt-visible{opacity:1}
-  .lt-headshot{width:152px;height:152px;border-radius:50%;object-fit:cover;background:#173a56;
-    border:4px solid #fbcc7a;flex:none}
+
+  .lt-figure{flex:none;opacity:1;transition:opacity .22s ease}
+  .lt-figure.swapping{opacity:0}
+  .lt-body{flex:1;display:flex;align-items:center;gap:26px;min-width:0;
+    opacity:1;transition:opacity .22s ease}
+  .lt-body.swapping{opacity:0}
+
+  .lt-headshot{width:184px;height:184px;border-radius:50%;object-fit:cover;background:#173a56;
+    border:5px solid #fbcc7a;flex:none;display:block}
   /* a club crest needs the whole shape visible on a light disc, not cropped to fill like a face */
-  .lt-headshot.team{object-fit:contain;background:#f5f7fa;padding:16px}
+  .lt-headshot.team{object-fit:contain;background:#f5f7fa;padding:18px}
   .lt-info{flex:none;min-width:0}
-  .lt-name{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:68px;line-height:1;
+  .lt-name{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:82px;line-height:.98;
     letter-spacing:.02em;color:#ffffff;white-space:nowrap}
-  .lt-sub{font-family:'DM Mono',monospace;font-weight:400;font-size:16px;color:#fbcc7a;
-    text-transform:uppercase;letter-spacing:.18em;white-space:nowrap;margin-top:9px}
-  .lt-divider{width:1px;align-self:stretch;margin:36px 0;background:rgba(255,255,255,.18);flex:none}
+  .lt-sub{font-family:'DM Mono',monospace;font-weight:500;font-size:20px;color:#fbcc7a;
+    text-transform:uppercase;letter-spacing:.18em;white-space:nowrap;margin-top:11px}
+  .lt-divider{width:1px;align-self:stretch;margin:44px 0;background:rgba(255,255,255,.18);flex:none}
   .lt-stats{flex:1;min-width:0;text-align:center}
-  .lt-hitline{font-family:'DM Mono',monospace;font-weight:400;font-size:14px;letter-spacing:.18em;
-    color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:8px;
+  .lt-hitline{font-family:'DM Mono',monospace;font-weight:500;font-size:19px;letter-spacing:.16em;
+    color:rgba(255,255,255,.6);text-transform:uppercase;margin-bottom:12px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .lt-hitline .split{color:#fbcc7a}
+  .lt-hitline:empty{display:none}
   /* never wraps to a second row — sizeCells() in JS shrinks cell width + font to fit whatever
-     count of stats is on screen, in one line, same as the canvas PNG export does */
+     count of stats is on screen, in one line */
   .lt-cells{display:flex;justify-content:center;align-items:flex-end;gap:0;flex-wrap:nowrap;width:100%}
-  .lt-cells .lt-cell{width:150px;flex:0 0 auto;text-align:center;min-width:0}
-  .lt-cell .v{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:62px;line-height:1;
-    color:#ffffff;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
-  .lt-cell .k{font-family:'DM Mono',monospace;font-weight:400;font-size:13px;color:#fbcc7a;
-    text-transform:uppercase;letter-spacing:.16em;white-space:nowrap;overflow:hidden;margin-top:8px}
-  .lt-watermark{position:absolute;right:24px;bottom:14px;font-family:'DM Mono',monospace;
-    font-size:12px;letter-spacing:.2em;color:rgba(255,255,255,.3);text-transform:uppercase}
+  .lt-cells .lt-cell{width:180px;flex:0 0 auto;text-align:center;min-width:0}
+  .lt-cell .v{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:88px;line-height:.94;
+    color:#ffffff;letter-spacing:.01em;white-space:nowrap;overflow:hidden}
+  .lt-cell .v span{display:inline-block;white-space:nowrap}
+  .lt-cell .k{font-family:'DM Mono',monospace;font-weight:500;font-size:21px;color:rgba(255,255,255,.72);
+    text-transform:uppercase;letter-spacing:.14em;white-space:nowrap;overflow:hidden;margin-top:9px}
+  .lt-cell .r{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:30px;line-height:1;
+    color:#fbcc7a;letter-spacing:.04em;white-space:nowrap;overflow:hidden;margin-top:5px}
+  .lt-cell .r:empty{display:none}
   body.display-mode{background:transparent}
   body.display-mode header, body.display-mode main, body.display-mode #status,
   body.display-mode .modal-backdrop{display:none}
@@ -402,17 +415,20 @@
      Add &src=server as well when the relay (trade_snapshot_server.py) is running. -->
 <div id="lowerThirdDisplay">
   <div class="lt-bar" id="ltBar">
-    <img id="ltHeadshot" class="lt-headshot" alt="">
-    <div class="lt-info">
-      <div class="lt-name" id="ltName"></div>
-      <div class="lt-sub" id="ltSub"></div>
+    <div class="lt-figure" id="ltFigure">
+      <img id="ltHeadshot" class="lt-headshot" alt="">
     </div>
-    <div class="lt-divider"></div>
-    <div class="lt-stats">
-      <div class="lt-hitline" id="ltHitline"></div>
-      <div class="lt-cells" id="ltCells"></div>
+    <div class="lt-body" id="ltBody">
+      <div class="lt-info">
+        <div class="lt-name" id="ltName"></div>
+        <div class="lt-sub" id="ltSub"></div>
+      </div>
+      <div class="lt-divider"></div>
+      <div class="lt-stats">
+        <div class="lt-hitline" id="ltHitline"></div>
+        <div class="lt-cells" id="ltCells"></div>
+      </div>
     </div>
-    <div class="lt-watermark">Talkin' Baseball</div>
   </div>
 </div>
 
@@ -970,7 +986,7 @@ async function renderLowerThird(data, row, pid) {
   ]);
   const img = await loadSafeImage(headshotURL(pid));
 
-  const CW = 1920, CH = 1080, W = 1920, H = 200, BOTTOM_MARGIN = 60;
+  const CW = 1920, CH = 1080, W = 1920, H = 250, BOTTOM_MARGIN = 60;
   const canvas = document.createElement('canvas'); canvas.width = CW; canvas.height = CH;
   const ctx = canvas.getContext('2d');
   ctx.translate(0, CH - H - BOTTOM_MARGIN);
@@ -979,9 +995,9 @@ async function renderLowerThird(data, row, pid) {
   const g = ctx.createLinearGradient(0, 0, W, 0);
   g.addColorStop(0, '#0d1f2d'); g.addColorStop(.55, '#173a56'); g.addColorStop(1, '#0d2233');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#fbcc7a'; ctx.fillRect(0, 0, W, 6);
+  ctx.fillStyle = '#fbcc7a'; ctx.fillRect(0, 0, W, 7);
 
-  const cx = 120, cy = H / 2, r = 76;
+  const cx = 136, cy = H / 2, r = 92;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath();
   if (img) {
     ctx.save(); ctx.clip();
@@ -995,28 +1011,28 @@ async function renderLowerThird(data, row, pid) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('NO PHOTO', cx, cy);
   }
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#fbcc7a'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.lineWidth = 5; ctx.strokeStyle = '#fbcc7a'; ctx.stroke();
 
-  const nx = 236;
+  const nx = 268;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#ffffff'; ctx.font = '72px "Bebas Neue"';
-  ctx.fillText(row.name.toUpperCase(), nx, 120);
-  ctx.fillStyle = '#fbcc7a'; ctx.font = '400 17px "DM Mono"';
-  ctx.fillText([row.pos, row.team].filter(Boolean).join('  ·  ').toUpperCase(), nx, 154);
+  ctx.fillStyle = '#ffffff'; ctx.font = '82px "Bebas Neue"';
+  ctx.fillText(row.name.toUpperCase(), nx, 142);
+  ctx.fillStyle = '#fbcc7a'; ctx.font = '500 20px "DM Mono"';
+  ctx.fillText([row.pos, row.team].filter(Boolean).join('  ·  ').toUpperCase(), nx, 180);
 
-  const divX = 800;
+  const divX = 860;
   ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(divX, 36); ctx.lineTo(divX, H - 36); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(divX, 44); ctx.lineTo(divX, H - 44); ctx.stroke();
 
   const startX = divX + 30, avail = W - 30 - startX;
-  const cellW = Math.min(150, avail / data.cells.length);
+  const cellW = Math.min(180, avail / data.cells.length);
   const groupW = cellW * data.cells.length, groupStart = startX + (avail - groupW) / 2;
 
   // split label (e.g. "LAST 30 DAYS") in gold, the counting line (e.g. "12-FOR-72") faded next to it
   const splitText = data.label ? data.label.toUpperCase() : '';
   const subText = data.hitLine ? data.hitLine.toUpperCase() : '';
   if (splitText) {
-    let fs = 18;
+    let fs = 21;
     const measure = size => {
       ctx.font = `500 ${size}px "DM Mono"`;
       const w1 = ctx.measureText(splitText).width;
@@ -1024,36 +1040,39 @@ async function renderLowerThird(data, row, pid) {
       const w2 = subText ? ctx.measureText('   ·   ' + subText).width : 0;
       return w1 + w2;
     };
-    while (fs > 10 && measure(fs) > groupW) fs -= 1;
+    while (fs > 12 && measure(fs) > groupW) fs -= 1;
     const totalW = measure(fs);
     let x = groupStart + groupW / 2 - totalW / 2;
     ctx.textAlign = 'left';
     ctx.font = `500 ${fs}px "DM Mono"`;
     ctx.fillStyle = '#fbcc7a';
-    ctx.fillText(splitText, x, 46);
+    ctx.fillText(splitText, x, 54);
     x += ctx.measureText(splitText).width;
     if (subText) {
       ctx.font = `400 ${fs}px "DM Mono"`;
       ctx.fillStyle = 'rgba(255,255,255,.55)';
-      ctx.fillText('   ·   ' + subText, x, 46);
+      ctx.fillText('   ·   ' + subText, x, 54);
     }
   }
-  const valueSize = data.cells.length > 6 ? 68 : 80, labelSize = data.cells.length > 6 ? 14 : 16;
-  data.cells.forEach(([label, value], i) => {
+  const anyRank = data.cells.some(c => c[2]);
+  const valueSize = data.cells.length > 6 ? 74 : 88, labelSize = data.cells.length > 6 ? 18 : 21;
+  data.cells.forEach(([label, value, rank], i) => {
     const x = groupStart + i * cellW + cellW / 2;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     let vs = valueSize;
     ctx.font = `${vs}px "Bebas Neue"`;
-    while (vs > 26 && ctx.measureText(String(value)).width > cellW - 10)
+    while (vs > 30 && ctx.measureText(String(value)).width > cellW - 12)
       ctx.font = `${vs -= 2}px "Bebas Neue"`;
-    ctx.fillText(String(value), x, H / 2 + 22);
-    ctx.fillStyle = '#fbcc7a'; ctx.font = `400 ${labelSize}px "DM Mono"`;
-    ctx.fillText(label, x, H / 2 + 54);
+    const baseY = anyRank ? H / 2 + 6 : H / 2 + 26;
+    ctx.fillText(String(value), x, baseY);
+    ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.font = `500 ${labelSize}px "DM Mono"`;
+    ctx.fillText(label, x, baseY + 34);
+    if (rank) {
+      ctx.fillStyle = '#fbcc7a'; ctx.font = '30px "Bebas Neue"';
+      ctx.fillText(String(rank).toUpperCase(), x, baseY + 68);
+    }
   });
-
-  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '400 12px "DM Mono"';
-  ctx.fillText("TALKIN' BASEBALL", W - 24, H - 16);
 
   return { canvas, hadPhoto: !!img };
 }
@@ -1197,7 +1216,8 @@ function updateOnAirUI(payload) {
   const cycling = payload.cycle && payload.cards.length > 1
     ? ` \u00b7 cycling ${payload.cards.length} every ${cycleSecs}s` : '';
   const off = payload.live ? '' : ' \u00b7 OFF AIR';
-  $('onairText').innerHTML = `On air: <b>${c.name}</b> \u00b7 ${c.label}${cycling}${off}`;
+  const who = c.kind === 'team' ? `${c.teamName || 'Team'} \u00b7 ${c.name}` : `${c.name} \u00b7 ${c.label}`;
+  $('onairText').innerHTML = `On air: <b>${who}</b>${cycling}${off}`;
 }
 
 // Build the card for one timeframe of one player: hitting for position players, pitching for
@@ -1268,7 +1288,8 @@ function dropStaleOnAir() {
 
 // matches the CSS transition duration on .lt-bar, so a player-to-player swap fades the old one
 // fully out before the new content is painted and faded back in — never an instant content pop
-const LT_FADE_MS = 350;
+const LT_FADE_MS = 350;   // whole-bar on/off
+const LT_SWAP_MS = 230;   // content-only cross-fade, matches .lt-body / .lt-figure transitions
 let ltFadeTimer = null;
 let ltVisible = false;
 
@@ -1301,36 +1322,44 @@ function payloadSig(p) {
   return p ? JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards]) : 'OFF';
 }
 
+const cardImage = card => card.kind === 'team' ? logoURL(card.id) : headshotURL(card.id);
+
 function paintCard(card) {
-  const img = $('ltHeadshot');
-  img.src = card.kind === 'team' ? logoURL(card.id) : headshotURL(card.id);
+  const fig = $('ltFigure'), img = $('ltHeadshot');
+  const src = cardImage(card);
+  img.src = src;
   img.classList.toggle('team', card.kind === 'team');
+  fig.dataset.src = src;
   $('ltName').textContent = (card.name || '').toUpperCase();
   $('ltSub').textContent = (card.sub || '').toUpperCase();
   const hitEl = $('ltHitline');
   const splitText = card.label ? card.label.toUpperCase() : '';
   const subText = card.hitLine ? card.hitLine.toUpperCase() : '';
   hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  \u00b7  ' + subText : ''}` : '';
-  hitEl.style.display = splitText ? '' : 'none';
-  $('ltCells').innerHTML = (card.cells || []).map(([label, value]) =>
-    `<div class="lt-cell"><div class="v">${value}</div><div class="k">${label}</div></div>`).join('');
-  sizeCells((card.cells || []).length);
+  // cells are [statLabel, value] or [statLabel, value, rankText]
+  $('ltCells').innerHTML = (card.cells || []).map(([label, value, rank]) =>
+    `<div class="lt-cell"><div class="v"><span>${value}</span></div><div class="k">${label}</div>` +
+    `<div class="r">${rank || ''}</div></div>`).join('');
+  scheduleSizeCells();
+  fig.classList.remove('swapping');
+  $('ltBody').classList.remove('swapping');
   $('ltBar').classList.add('lt-visible');
   ltVisible = true;
 }
 
-// Cross-fades to a card: fade the old one fully out before swapping content, so a change is
-// never an instant content pop. Only used when something is already on screen.
+// Swaps content without touching the background. The bar itself only animates coming on air and
+// going off; a stat change fades just the body (and the picture, but only if the picture differs).
 function swapToCard(i) {
   const card = ltState.cards[i];
   if (!card) return;
   clearTimeout(ltFadeTimer);
-  if (ltVisible) {
-    $('ltBar').classList.remove('lt-visible');
-    ltFadeTimer = setTimeout(() => paintCard(card), LT_FADE_MS);
-  } else {
-    paintCard(card);
-  }
+  if (!ltVisible) { paintCard(card); return; }
+
+  const fig = $('ltFigure'), body = $('ltBody');
+  const imgChanges = fig.dataset.src !== cardImage(card);
+  body.classList.add('swapping');
+  if (imgChanges) fig.classList.add('swapping');
+  ltFadeTimer = setTimeout(() => paintCard(card), LT_SWAP_MS);
 }
 
 function renderOnAirBar(raw) {
@@ -1370,28 +1399,61 @@ function renderOnAirBar(raw) {
 // Shrinks each stat cell (width + font) to whatever fits the available bar width in one row —
 // mirrors the shrink-to-fit the canvas PNG export already does, so the live OBS bar never wraps
 // to a second line no matter how many cells a timeframe adds.
-function sizeCells(n) {
+// Scales the cells to FILL the bar, not just to fit inside it: with five stats on screen there's
+// a lot of unused width, and a host reading off a monitor across the room needs the numbers as
+// large as the space allows. The step is chosen from the width each cell actually gets, so a
+// seven-stat player card steps down and a four-stat defense card steps up.
+function sizeCells() {
   const wrap = $('ltCells');
-  if (!wrap || !n) return;
-  const avail = wrap.clientWidth || n * 150;
-  const w = Math.max(64, Math.min(150, Math.floor(avail / n)));
-  const tight = w < 130, veryTight = w < 90;
-  const valueFs = veryTight ? 36 : tight ? 46 : 62;
-  const keyFs = veryTight ? 9 : tight ? 11 : 13;
-  wrap.querySelectorAll('.lt-cell').forEach(cell => {
+  if (!wrap) return;
+  const cells = [...wrap.querySelectorAll('.lt-cell')];
+  if (!cells.length) return;
+  const n = cells.length;
+  // measured after layout, never guessed — an early read here is what produced 32px numbers
+  const avail = wrap.clientWidth;
+  if (!avail) return;
+  const w = Math.max(74, Math.min(260, Math.floor(avail / n)));
+  const step = w >= 200 ? { v: 104, k: 25, r: 35 }
+             : w >= 150 ? { v: 88,  k: 21, r: 30 }
+             : w >= 105 ? { v: 68,  k: 17, r: 24 }
+             :            { v: 52,  k: 13, r: 18 };
+  cells.forEach(cell => {
     cell.style.width = w + 'px';
-    const v = cell.querySelector('.v'), k = cell.querySelector('.k');
-    if (v) v.style.fontSize = valueFs + 'px';
-    if (k) k.style.fontSize = keyFs + 'px';
+    const v = cell.querySelector('.v'), k = cell.querySelector('.k'), r = cell.querySelector('.r');
+    if (k) k.style.fontSize = step.k + 'px';
+    if (r) r.style.fontSize = step.r + 'px';
+    if (!v) return;
+    const span = v.firstElementChild;
+    let fs = step.v;
+    v.style.fontSize = fs + 'px';
+    // a long value like "609.1" or "1.115" can still outrun its cell at the top step. Measuring
+    // the inline span gives the text width; measuring the block div would just give the box back.
+    while (fs > 34 && span && span.offsetWidth > w - 10) { fs -= 3; v.style.fontSize = fs + 'px'; }
   });
 }
 
-/* ---- display side: subscribe to the topic (SSE + watchdog + polling safety net) ----------
-   Same belt-and-braces shape the Trade Deadline display uses, and for the same reason: plain
-   SSE is near-instant, but corporate proxies, VPNs and antivirus HTTPS scanning all like to
-   buffer long-lived streams and flush them every ~30s. A discrete poll isn't subject to that,
-   so it runs alongside as a safety net, and a watchdog force-reconnects a stream that's gone
-   quiet in a way the browser hasn't noticed. */
+// Sizing has to happen after the browser has laid the new cells out, and again once Bebas Neue is
+// actually available — measuring against a fallback font gives the wrong answer.
+let sizeRaf = null;
+function scheduleSizeCells() {
+  cancelAnimationFrame(sizeRaf);
+  sizeRaf = requestAnimationFrame(() => requestAnimationFrame(sizeCells));
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleSizeCells);
+window.addEventListener('resize', scheduleSizeCells);
+
+// A browser freezes CSS transitions in a hidden tab. If the page gets hidden mid-swap the body can
+// come back still stuck at opacity 0 — background on screen with no stats in it, which is a lot
+// worse on air than a hard cut. Whenever we become visible, snap the layers back to their resting
+// state and re-measure rather than trusting an interrupted transition to have finished.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  const fig = $('ltFigure'), body = $('ltBody');
+  if (fig) fig.classList.remove('swapping');
+  if (body) body.classList.remove('swapping');
+  scheduleSizeCells();
+});
+
 function initTopicDisplay() {
   let es = null, lastMsgAt = Date.now(), sincePoll = Math.floor(Date.now() / 1000);
 
@@ -1546,37 +1608,27 @@ function rankMap(splits, field, dir) {
   return out;
 }
 
-async function teamRecord(teamId, year) {
-  try {
-    const d = await jc(`${API}/standings?leagueId=103,104&season=${year}&standingsTypes=regularSeason`);
-    for (const rec of (d.records || []))
-      for (const tr of (rec.teamRecords || []))
-        if (tr.team && tr.team.id === +teamId) return `${tr.wins}-${tr.losses}`;
-  } catch {}
-  return '';
-}
-
 // Returns one card per category, cells labelled with the club's rank: "ERA · 4TH".
 async function buildTeamCardSet(teamId, teamName, year) {
-  const [record, groups] = await Promise.all([
-    teamRecord(teamId, year),
-    Promise.all(TEAM_SPECS.map(spec => fetchTeamGroup(spec, year).catch(() => []))),
-  ]);
+  const groups = await Promise.all(TEAM_SPECS.map(spec => fetchTeamGroup(spec, year).catch(() => [])));
   const cards = [];
   TEAM_SPECS.forEach((spec, gi) => {
     const splits = groups[gi];
     const mine = splits.find(sp => sp.team && sp.team.id === +teamId);
     if (!mine) return;
+    const total = splits.filter(sp => sp.team).length || 30;
     const cells = spec.cells.map(([label, field, dir]) => {
       const raw = mine.stat[field];
       if (raw == null || raw === '') return null;
       const rank = rankMap(splits, field, dir).get(+teamId);
-      return [rank ? `${label} \u00b7 ${ordinal(rank)}` : label, String(raw)];
+      return [label, String(raw), rank ? `${ordinal(rank)} of ${total}` : ''];
     }).filter(Boolean);
     if (!cells.length) return;
-    cards.push({ kind: 'team', id: +teamId, name: teamName,
-                 sub: `${year} \u00b7 RANK OF 30`, label: `${year} ${spec.label}`,
-                 hitLine: record, cells, specKey: spec.key });
+    // The crest identifies the club, so the headline is the category — it's the thing that changes
+    // as the cycle runs, and it's what a host reading off the monitor needs to see.
+    cards.push({ kind: 'team', id: +teamId, name: spec.label,
+                 sub: `${year} \u00b7 MLB RANK OF ${total}`, label: '', hitLine: '',
+                 cells, specKey: spec.key, teamName });
   });
   return cards;
 }
@@ -1619,7 +1671,7 @@ async function openTeamModal(teamId) {
 function paintTeamPills() {
   const box = $('teamPills'); box.innerHTML = '';
   teamCards.forEach(c => {
-    const b = el('button', 'tf-pill' + (c.specKey === teamSpecKey ? ' on' : ''), c.label.replace(/^\d+ /, ''));
+    const b = el('button', 'tf-pill' + (c.specKey === teamSpecKey ? ' on' : ''), c.name);
     b.type = 'button';
     b.onclick = () => { teamSpecKey = c.specKey; paintTeamPills(); paintTeamBody(); pushTeamOnAir(); };
     box.appendChild(b);
@@ -1629,10 +1681,8 @@ function paintTeamPills() {
 function paintTeamBody() {
   const card = teamCards.find(c => c.specKey === teamSpecKey);
   if (!card) { $('teamModalBody').innerHTML = '<div class="modal-empty">No stats in this category.</div>'; return; }
-  const grid = statGrid(card.cells.map(([k, v]) => [k, v]));
-  $('teamModalBody').innerHTML =
-    `<div class="modal-section"><h3>${card.label}</h3>` +
-    (card.hitLine ? `<div class="modal-hitline">${card.hitLine}</div>` : '') + grid + `</div>`;
+  const grid = statGrid(card.cells.map(([k, v, rank]) => [rank ? `${k} · ${rank}` : k, v]));
+  $('teamModalBody').innerHTML = `<div class="modal-section"><h3>${card.name}</h3>${grid}</div>`;
 }
 
 function pushTeamOnAir() {
