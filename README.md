@@ -142,10 +142,22 @@ stays the same across restarts so you set the Browser Source up once.
 
 **On a topic (Option B):**
 
-1. **Topic mismatch.** The control pill says connected but the display URL has an older topic in
-   it — re-copy it.
-2. **`file://`.** The OBS machine can't open a path on your laptop. Host it on Pages.
-3. **Blocked network.** Some corporate networks block ntfy.sh outright. Fall back to Option C.
+**First: does the Connection pill say `connected` in green?** If it says `not reaching topic`,
+nothing is getting out and OBS cannot possibly update — skip to point 4.
+
+1. **Stale page in OBS.** Check the build stamp in the control header, then re-copy the display URL
+   (it carries `&v=<build>`, so a re-paste fetches new code) or right-click the Browser Source →
+   **Refresh cache of current page**. A cached OBS page is the most common cause and it fails
+   silently.
+2. **Topic mismatch.** The display URL in OBS has an older topic than the one you connected. Re-copy.
+3. **`file://`.** The OBS machine can't open a path on your laptop. Host it on Pages.
+4. **ntfy.sh unreachable.** Some networks block it, and it's a free service that can throttle. Test
+   it directly: `curl -m 10 https://ntfy.sh/anytopic/json?poll=1&since=1m`. A timeout means blocked —
+   fall back to Option C, which stays on your own network.
+
+**Careful with "Open Display ↗" as a test.** With a topic connected it opens the exact URL OBS gets,
+so it's a real check. With no topic it falls back to BroadcastChannel, which only works between tabs
+of one browser — it will light up on your laptop and stay dark in OBS no matter what's wrong.
 
 **On the local relay (Option C):**
 

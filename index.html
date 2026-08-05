@@ -1110,6 +1110,17 @@ function setConn(ok) {
   pill.classList.toggle('ok', !!ok);
   pill.textContent = ok ? 'connected' : (TOPIC ? 'not reaching topic' : 'not connected');
   $('copyDisplayBtn').disabled = !TOPIC;
+  // A red pill on its own is easy to miss, and the consequence isn't obvious: OBS goes stale while
+  // the control page keeps working, and "Open Display" keeps working too because same-browser tabs
+  // never touch the network. Say the actual consequence.
+  if (TOPIC && !ok) {
+    const hint = $('connHint');
+    hint.textContent = "Can't reach ntfy.sh — OBS will NOT update. Some networks block it; "
+      + 'use the local relay (trade_snapshot_server.py) instead.';
+    hint.className = 'hint warn';
+  } else if (TOPIC && ok) {
+    updateConnHint();
+  }
   // the LAN-relay panel is the fallback for when there's no internet — no point showing two
   // competing "copy this URL" affordances once a topic is live
   if (TOPIC && ok) $('obsUrl').hidden = true;
@@ -1176,18 +1187,27 @@ const cardFromData = (kind, id, name, sub, data) =>
   ({ kind, id, name, sub, label: data.label, hitLine: data.hitLine, cells: data.cells });
 
 function broadcast() {
-  const payload = onAirCards.length ? {
-    v: 2, live: airLive, cards: onAirCards, index: onAirIndex,
+  const active = onAirCards[onAirIndex] || onAirCards[0];
+  // Off air publishes a plain clear rather than live:false. Old display code has no concept of a
+  // live flag and would keep rendering; a clear takes the bar down on every version. Nothing is
+  // lost — the card set lives on this side and gets republished when it goes back on air.
+  const payload = (onAirCards.length && airLive && active) ? {
+    v: 2, live: true, cards: onAirCards, index: onAirIndex,
     cycle: onAirCycle, intervalMs: cycleSecs * 1000, ts: Date.now(),
+    // v1 mirror of whatever is showing. An OBS Browser Source running a cached copy of the older
+    // page reads these and keeps working (single card, no cycling) instead of going blank —
+    // caches are exactly the thing you can't clear from here mid-show.
+    pid: active.id, kind: 'bat', name: active.name, pos: '', team: active.sub || '',
+    data: { label: active.label || active.name, hitLine: active.hitLine || '', cells: active.cells },
   } : null;
   try {
     if (payload) localStorage.setItem(LT_KEY, JSON.stringify(payload));
     else localStorage.removeItem(LT_KEY);
   } catch {}
-  if (ltChannel) ltChannel.postMessage(payload || { clear: true });
+  if (ltChannel) ltChannel.postMessage(payload || { clear: true, ts: Date.now() });
   publishTopic(payload);
   relayPost(payload);
-  updateOnAirUI(payload);
+  updateOnAirUI(payload, active);
 }
 
 function pushCards(cards, opts) {
@@ -1216,14 +1236,14 @@ function setAirLive(live) {
   broadcast();
 }
 
-function updateOnAirUI(payload) {
+function updateOnAirUI(payload, active) {
   const box = $('onair'); if (!box) return;
-  box.hidden = !payload;
-  if (!payload) return;
-  const c = payload.cards[payload.index] || payload.cards[0];
-  const cycling = payload.cycle && payload.cards.length > 1
-    ? ` \u00b7 cycling ${payload.cards.length} every ${cycleSecs}s` : '';
-  const off = payload.live ? '' : ' \u00b7 OFF AIR';
+  const c = payload ? (payload.cards[payload.index] || payload.cards[0]) : active;
+  box.hidden = !c;
+  if (!c) return;
+  const cycling = onAirCycle && onAirCards.length > 1
+    ? ` \u00b7 cycling ${onAirCards.length} every ${cycleSecs}s` : '';
+  const off = airLive ? '' : ' \u00b7 OFF AIR';
   const who = c.kind === 'team' ? `${c.teamName || 'Team'} \u00b7 ${c.name}` : `${c.name} \u00b7 ${c.label}`;
   $('onairText').innerHTML = `On air: <b>${who}</b>${cycling}${off}`;
 }
@@ -1499,7 +1519,11 @@ function initTopicDisplay() {
       });
     } catch { /* network hiccup; the next interval retries */ }
   };
-  setInterval(() => pollOnce(), 4000);
+  // SSE is the primary path and is near-instant; this only exists to cover networks that buffer
+  // streaming connections. At 4s it was ~900 requests an hour aimed at a free service for a
+  // three-hour show, which is a good way to get throttled by the thing you depend on. 10s keeps
+  // the safety net with a worst case that still beats a stalled stream.
+  setInterval(() => pollOnce(), 10000);
 
   // Backfill on load: SSE only carries what's published from now on, so a Browser Source that
   // OBS just refreshed mid-show would sit blank until the next click. Replaying the last few
@@ -1771,9 +1795,12 @@ document.onkeydown = e => {
   else if (!$('teamModalBackdrop').hidden) closeTeamModal();
 };
 $('openDisplay').onclick = () => {
+  // Open the exact URL OBS would get, so this is a real test of the path rather than a false
+  // positive. Without the topic this tab would sync over BroadcastChannel — which only works
+  // between tabs of one browser, so it would light up here and stay dark in OBS.
+  if (TOPIC) { window.open(displayURL(), '_blank'); return; }
   const url = new URL(location.href);
   url.searchParams.set('display', '1');
-  // if the relay answered our last push, hand the display view the same route
   if ($('feedChip').classList.contains('live')) url.searchParams.set('src', 'server');
   window.open(url.href, '_blank');
 };
