@@ -313,7 +313,7 @@
 </head>
 <body>
 <header>
-  <div class="datanote" id="datanote">Data <b>Live via MLB StatsAPI</b></div>
+  <div class="datanote" id="datanote">Data <b>Live via MLB StatsAPI</b> · Build <b id="buildStamp">—</b></div>
   <div class="eyebrow">Talkin' Baseball</div>
   <div class="titlerow">
     <h1>TRADE SNAPSHOT<span>.</span></h1>
@@ -481,6 +481,14 @@ const RELAY_KEY = params.get('key') || '';
 // ntfy.sh, so the control laptop and the OBS machine don't have to be on the same network —
 // or even in the same building. No server to run. Needs both pages served from a real host
 // (GitHub Pages), since the OBS machine can't open a file:// path off your laptop.
+// Deploy stamp, straight off the document's Last-Modified — no constant to remember to bump.
+// It does two jobs: it's shown in the header so you can tell at a glance whether the page you're
+// looking at is the current build, and it goes into the display URL so that URL CHANGES on every
+// deploy. That last part matters because GitHub Pages sends `cache-control: max-age=600` and an OBS
+// Browser Source caches harder still — a stale OBS copy of this page is invisible and confusing,
+// but a changed URL fetches fresh.
+const BUILD = (document.lastModified || '').replace(/\D/g, '').slice(0, 14);
+
 const NTFY = 'https://ntfy.sh';
 const TOPIC_KEY = 'tb-snapshot-topic';
 let TOPIC = params.get('topic') || '';
@@ -1773,7 +1781,8 @@ $('openDisplay').onclick = () => {
 // only exists on this laptop. Say so up front rather than letting him paste a dead link into OBS.
 const servedFromHost = /^https?:$/.test(location.protocol);
 function displayURL() {
-  return `${location.href.split(/[?#]/)[0]}?display=1&topic=${encodeURIComponent(TOPIC)}`;
+  return `${location.href.split(/[?#]/)[0]}?display=1&topic=${encodeURIComponent(TOPIC)}`
+    + (BUILD ? `&v=${BUILD}` : '');
 }
 
 function connectTopic() {
@@ -1847,6 +1856,8 @@ const yr = new Date().getFullYear();
 if (isDisplayMode) {
   initDisplay();
 } else {
+  const stamp = $('buildStamp');
+  if (stamp) stamp.textContent = document.lastModified || 'unknown';
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
 
   // Reconnect to last show's topic automatically; first run gets a suggested one so the only
