@@ -1105,8 +1105,22 @@ function publishTopic(payload) {
   }).then(r => setConn(r.ok)).catch(() => setConn(false));
 }
 
+// Tracked separately so the two transports can be reasoned about together: the relay panel is the
+// fallback, and it has to appear precisely when the topic ISN'T carrying — which is the moment you
+// need it most. Keying it off "is a topic saved" hid the working path during an ntfy outage.
+let topicOk = false, relayLive = false;
+
+function refreshObsPanel() {
+  const show = relayLive && !topicOk;
+  const box = $('obsUrl'); if (!box) return;
+  box.hidden = !show;
+  if (show) loadObsUrl();
+}
+
 function setConn(ok) {
   const pill = $('connStatus'); if (!pill) return;
+  topicOk = !!ok && !!TOPIC;
+  refreshObsPanel();
   pill.classList.toggle('ok', !!ok);
   pill.textContent = ok ? 'connected' : (TOPIC ? 'not reaching topic' : 'not connected');
   $('copyDisplayBtn').disabled = !TOPIC;
@@ -1115,23 +1129,23 @@ function setConn(ok) {
   // never touch the network. Say the actual consequence.
   if (TOPIC && !ok) {
     const hint = $('connHint');
-    hint.textContent = "Can't reach ntfy.sh — OBS will NOT update. Some networks block it; "
-      + 'use the local relay (trade_snapshot_server.py) instead.';
+    hint.textContent = relayLive
+      ? "Can't reach ntfy.sh — OBS will NOT update over a topic. The local relay IS running: use the "
+        + 'OBS Browser Source URL below instead.'
+      : "Can't reach ntfy.sh — OBS will NOT update. Run trade_snapshot_server.py and use the relay URL "
+        + 'that appears here.';
     hint.className = 'hint warn';
   } else if (TOPIC && ok) {
     updateConnHint();
   }
-  // the LAN-relay panel is the fallback for when there's no internet — no point showing two
-  // competing "copy this URL" affordances once a topic is live
-  if (TOPIC && ok) $('obsUrl').hidden = true;
 }
 
 function setFeed(live) {
   const chip = $('feedChip'); if (!chip) return;
-  chip.classList.toggle('live', !!live);
-  $('feedText').textContent = live ? 'Relay live' : 'Local only';
-  $('obsUrl').hidden = !live || !!TOPIC;
-  if (live && !TOPIC) loadObsUrl();
+  relayLive = !!live;
+  chip.classList.toggle('live', relayLive);
+  $('feedText').textContent = relayLive ? 'Relay live' : 'Local only';
+  refreshObsPanel();
 }
 
 // Ask the relay what address the rest of the network sees it on, and build the URL to paste
@@ -1893,7 +1907,7 @@ if (isDisplayMode) {
   let saved = '';
   try { saved = localStorage.getItem(TOPIC_KEY) || ''; } catch {}
   $('topicInput').value = saved || `tb-snapshot-${Math.random().toString(36).slice(2, 8)}`;
-  if (saved) { TOPIC = saved; setConn(true); publishTopic(null); }
+  if (saved) { TOPIC = saved; setConn(false); publishTopic(null); }
   else setConn(false);
   updateConnHint();
   // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone

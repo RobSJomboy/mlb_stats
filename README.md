@@ -128,7 +128,9 @@ python3 trade_snapshot_server.py
 - The header shows a copyable **OBS Browser Source URL** with the key already in it:
   `http://192.168.1.29:8787/index.html?display=1&src=server&key=xKP8OCplbCY`
 
-Both machines have to be on the same network. The panel only appears when no topic is connected.
+Both machines have to be on the same network. The panel appears whenever the relay is running and
+the topic isn't carrying — including when a topic is saved but unreachable, which is exactly when
+you need the fallback URL in front of you.
 
 **About that key.** Anything from another machine has to present it; anything from this machine
 doesn't. So the control page needs no key, and the one URL that carries one is the OBS URL, handed
