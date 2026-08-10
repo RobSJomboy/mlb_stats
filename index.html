@@ -489,7 +489,19 @@ const RELAY_KEY = params.get('key') || '';
 // but a changed URL fetches fresh.
 const BUILD = (document.lastModified || '').replace(/\D/g, '').slice(0, 14);
 
-const NTFY = 'https://ntfy.sh';
+// ntfy.sh went down mid-show once already today. The protocol is self-hostable and there are
+// public mirrors running the same API, so rather than depend on one host we publish to several
+// and subscribe to all of them. Any single host being up is enough.
+//
+// Receiving the same payload three times is free: renderOnAirBar already drops anything whose
+// content matches what's on screen, which was built for SSE-plus-poll duplicates and covers this
+// exactly. ?ntfy=https://host pins a single host if you ever need to.
+const NTFY_HOSTS = (params.get('ntfy') ? [params.get('ntfy').replace(/\/$/, '')] : [
+  'https://ntfy.sh',
+  'https://ntfy.envs.net',
+  'https://ntfy.adminforge.de',
+]);
+const NTFY = NTFY_HOSTS[0];
 const TOPIC_KEY = 'tb-snapshot-topic';
 let TOPIC = params.get('topic') || '';
 const relayURL = (path, extra) => {
@@ -1099,10 +1111,15 @@ function relayPost(payload) {
 // pill goes back to grey on the next publish rather than blocking on a dead network.
 function publishTopic(payload) {
   if (!TOPIC) return;
-  fetch(`${NTFY}/${encodeURIComponent(TOPIC)}`, {
-    method: 'POST',
-    body: JSON.stringify(payload || { clear: true, ts: Date.now() }),
-  }).then(r => setConn(r.ok)).catch(() => setConn(false));
+  const body = JSON.stringify(payload || { clear: true, ts: Date.now() });
+  // Green if ANY host took it — one mirror is all it takes to reach OBS.
+  let anyOk = false, settled = 0;
+  NTFY_HOSTS.forEach(host => {
+    fetch(`${host}/${encodeURIComponent(TOPIC)}`, { method: 'POST', body })
+      .then(r => { if (r.ok) anyOk = true; })
+      .catch(() => {})
+      .finally(() => { if (++settled === NTFY_HOSTS.length) setConn(anyOk); });
+  });
 }
 
 // Tracked separately so the two transports can be reasoned about together: the relay panel is the
@@ -1404,9 +1421,17 @@ function swapToCard(i) {
   ltFadeTimer = setTimeout(() => paintCard(card), LT_SWAP_MS);
 }
 
+let lastAppliedTs = 0;
+
 function renderOnAirBar(raw) {
   const bar = $('ltBar');
   if (!bar) return;
+  // Several hosts feed this now, and a slow mirror can hand over an older payload after a newer
+  // one has already landed — which would put a stale graphic back on screen. Timestamps only move
+  // forward.
+  const ts = (raw && raw.ts) || 0;
+  if (ts && ts < lastAppliedTs) return;
+  if (ts) lastAppliedTs = ts;
   const p = normalizePayload(raw);
   const sig = payloadSig(p);
   // The same message arrives twice by design — SSE delivers it and the polling safety net
@@ -1497,52 +1522,49 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function initTopicDisplay() {
-  let es = null, lastMsgAt = Date.now(), sincePoll = Math.floor(Date.now() / 1000);
-
   const apply = envelope => {
-    lastMsgAt = Date.now();
     if (!envelope || !envelope.message) return;
-    try {
-      const s = JSON.parse(envelope.message);
-      renderOnAirBar(s);
-    } catch { /* ignore malformed payload */ }
+    try { renderOnAirBar(JSON.parse(envelope.message)); } catch { /* malformed payload */ }
   };
 
-  const connect = () => {
-    if (es) es.close();
-    es = new EventSource(`${NTFY}/${encodeURIComponent(TOPIC)}/sse`);
-    es.onmessage = ev => { try { apply(JSON.parse(ev.data)); } catch { /* non-JSON ping */ } };
-    es.onerror = () => { /* browser auto-retries; the watchdog covers silent stalls too */ };
-  };
-  connect();
+  // Each host gets its own stream, watchdog and poll. They all feed the same apply(), and the
+  // duplicate guard downstream means N hosts delivering the same message costs nothing.
+  NTFY_HOSTS.forEach(host => {
+    let es = null, lastMsgAt = Date.now(), sincePoll = Math.floor(Date.now() / 1000);
 
-  // ntfy keepalives land at least every ~45s even with no traffic, so 20s of total silence
-  // means the stream is dead in a way the browser hasn't reported yet.
-  setInterval(() => {
-    if (Date.now() - lastMsgAt > 20000) { connect(); lastMsgAt = Date.now(); }
-  }, 5000);
+    const bump = () => { lastMsgAt = Date.now(); };
+    const connect = () => {
+      if (es) es.close();
+      es = new EventSource(`${host}/${encodeURIComponent(TOPIC)}/sse`);
+      es.onmessage = ev => { bump(); try { apply(JSON.parse(ev.data)); } catch { /* ping */ } };
+      es.onerror = () => { /* browser auto-retries; the watchdog covers silent stalls */ };
+    };
+    connect();
 
-  const pollOnce = async (since) => {
-    const from = since != null ? since : sincePoll;
-    if (since == null) sincePoll = Math.floor(Date.now() / 1000);
-    try {
-      const res = await fetch(`${NTFY}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
-      const text = await res.text();
-      text.split('\n').filter(Boolean).forEach(line => {
-        try { apply(JSON.parse(line)); } catch { /* ignore malformed line */ }
-      });
-    } catch { /* network hiccup; the next interval retries */ }
-  };
-  // SSE is the primary path and is near-instant; this only exists to cover networks that buffer
-  // streaming connections. At 4s it was ~900 requests an hour aimed at a free service for a
-  // three-hour show, which is a good way to get throttled by the thing you depend on. 10s keeps
-  // the safety net with a worst case that still beats a stalled stream.
-  setInterval(() => pollOnce(), 10000);
+    // ntfy keepalives land at least every ~45s, so 20s of total silence means the stream is dead
+    // in a way the browser hasn't reported yet.
+    setInterval(() => {
+      if (Date.now() - lastMsgAt > 20000) { connect(); bump(); }
+    }, 5000);
 
-  // Backfill on load: SSE only carries what's published from now on, so a Browser Source that
-  // OBS just refreshed mid-show would sit blank until the next click. Replaying the last few
-  // minutes brings the current graphic straight back up.
-  pollOnce('10m');
+    const pollOnce = async (since) => {
+      const from = since != null ? since : sincePoll;
+      if (since == null) sincePoll = Math.floor(Date.now() / 1000);
+      try {
+        const res = await fetch(`${host}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
+        const text = await res.text();
+        bump();
+        text.split('\n').filter(Boolean).forEach(line => {
+          try { apply(JSON.parse(line)); } catch { /* malformed line */ }
+        });
+      } catch { /* this host is down; the others carry it */ }
+    };
+    // SSE is the primary path; this only covers networks that buffer streaming connections.
+    setInterval(() => pollOnce(), 10000);
+    // Backfill on load: SSE only carries what's published from now on, so a Browser Source OBS
+    // just refreshed would sit blank until the next click.
+    pollOnce('10m');
+  });
 }
 
 function initDisplay() {

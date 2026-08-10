@@ -111,6 +111,13 @@ Deadline display: some networks silently buffer streaming connections, and a pla
 subject to that. If OBS refreshes the Browser Source mid-show, the display replays the last few
 minutes on load, so the current graphic comes straight back up instead of sitting blank.
 
+**It doesn't depend on one host.** ntfy.sh went down mid-use once, so the control page publishes to
+several public ntfy instances and the display subscribes to all of them — any one being up is
+enough, and no reconfiguring happens mid-show. Receiving the same payload from three hosts is free:
+the duplicate guard that exists for SSE-plus-poll covers it, and payload timestamps only move
+forward so a slow mirror can't put a stale graphic back on screen. `?ntfy=https://host` pins one
+host if you need to.
+
 **Topics are public to anyone who knows the name.** That's why the suggested one has a random tail
 — a guessable topic is a stranger's write access to your lower third. Don't shorten it to something
 tidy like `talkinbaseball`.
