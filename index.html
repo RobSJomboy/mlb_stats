@@ -179,6 +179,13 @@
     color:var(--white);letter-spacing:.02em}
   .stat-grid .cell .k{font-family:var(--font-mono);font-size:8px;color:var(--gold);
     text-transform:uppercase;letter-spacing:.14em;margin-top:6px;opacity:.85}
+  .sx-row{display:flex;align-items:center;gap:13px;padding:9px 11px;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px}
+  .sx-logo{width:38px;height:38px;object-fit:contain;flex:none;background:#f5f7fa;
+    border-radius:50%;padding:4px}
+  .sx-opp{font-family:var(--font-display);font-size:19px;letter-spacing:.04em;color:var(--white);line-height:1}
+  .sx-games{font-family:var(--font-mono);font-size:12px;color:var(--gold);margin-top:5px;letter-spacing:.1em}
+  .sx-date{font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.1em}
   .modal-empty{color:var(--text3);font-size:13px;font-family:var(--font-mono)}
   .modal-dlnote{color:var(--text3);font-size:10px;font-family:var(--font-mono);text-align:right;
     margin-top:10px;min-height:14px}
@@ -199,8 +206,9 @@
   .cycle-row .sec{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;
     text-transform:uppercase;color:var(--text3)}
 
+  .team-actions{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:10px}
   .teamstats-btn{background:var(--gold);color:var(--navy-dark);border:1px solid var(--gold);
-    font-family:var(--font-display);font-size:16px;letter-spacing:.06em;padding:7px 16px;margin-bottom:10px}
+    font-family:var(--font-display);font-size:16px;letter-spacing:.06em;padding:7px 16px}
   .teamstats-btn:hover{background:#ffdc9b;border-color:#ffdc9b;color:var(--navy-dark)}
 
   /* ---- control page: on-air status chip ---- */
@@ -306,6 +314,17 @@
   .lt-cell .r{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:30px;line-height:1;
     color:#fbcc7a;letter-spacing:.04em;white-space:nowrap;overflow:hidden;margin-top:5px}
   .lt-cell .r:empty{display:none}
+
+  /* one upcoming series: crest, how many games, then the date smallest underneath */
+  .lt-cell.sched{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .sched-side{font-family:'DM Mono',monospace;font-weight:500;font-size:18px;color:#fbcc7a;
+    letter-spacing:.2em;text-transform:uppercase;margin-bottom:7px;white-space:nowrap}
+  .sched-logo{width:104px;height:104px;object-fit:contain;background:#f5f7fa;border-radius:50%;
+    padding:9px;display:block;box-sizing:border-box}
+  .lt-cell .g{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:52px;line-height:1;
+    color:#ffffff;letter-spacing:.02em;white-space:nowrap;margin-top:9px}
+  .lt-cell .d{font-family:'DM Mono',monospace;font-weight:400;font-size:14px;
+    color:rgba(255,255,255,.62);letter-spacing:.12em;white-space:nowrap;margin-top:6px}
   body.display-mode{background:transparent}
   body.display-mode header, body.display-mode main, body.display-mode #status,
   body.display-mode .modal-backdrop{display:none}
@@ -711,10 +730,15 @@ function paintRoster() {
     });
   });
   table.appendChild(tbody);
+  const actions = el('div', 'team-actions');
   const btn = el('button', 'teamstats-btn', '\u25a0 Team Stats \u2014 Ranks & Splits');
   btn.type = 'button';
   btn.onclick = () => { if (team) guard(openTeamModal)(team.id); };
-  addTable(`${team ? team.name : 'Team'} Roster — ${year}`, table, null, team ? btn : null);
+  const sched = el('button', 'teamstats-btn', '\u25a0 Next 3 Series');
+  sched.type = 'button';
+  sched.onclick = () => { if (team) guard(openTeamModal)(team.id, 'sched'); };
+  actions.appendChild(btn); actions.appendChild(sched);
+  addTable(`${team ? team.name : 'Team'} Roster — ${year}`, table, null, team ? actions : null);
 }
 
 function addTable(title, table, note, actions) {
@@ -1397,10 +1421,21 @@ function paintCard(card) {
   const splitText = card.label ? card.label.toUpperCase() : '';
   const subText = card.hitLine ? card.hitLine.toUpperCase() : '';
   hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  \u00b7  ' + subText : ''}` : '';
-  // cells are [statLabel, value] or [statLabel, value, rankText]
-  $('ltCells').innerHTML = (card.cells || []).map(([label, value, rank]) =>
-    `<div class="lt-cell"><div class="v"><span>${value}</span></div><div class="k">${label}</div>` +
-    `<div class="r">${rank || ''}</div></div>`).join('');
+  if (card.series && card.series.length) {
+    // crest, then the game count, then the date smallest underneath
+    $('ltCells').innerHTML = card.series.map(sx =>
+      `<div class="lt-cell sched">` +
+      `<div class="sched-side">${sx.home ? 'VS' : 'AT'}</div>` +
+      `<img class="sched-logo" src="${logoURL(sx.oppId)}" alt="${sx.oppName}" ` +
+      `onerror="this.style.visibility='hidden'">` +
+      `<div class="g">${sx.games} GAME${sx.games === 1 ? '' : 'S'}</div>` +
+      `<div class="d">${sx.dates}</div></div>`).join('');
+  } else {
+    // cells are [statLabel, value] or [statLabel, value, rankText]
+    $('ltCells').innerHTML = (card.cells || []).map(([label, value, rank]) =>
+      `<div class="lt-cell"><div class="v"><span>${value}</span></div><div class="k">${label}</div>` +
+      `<div class="r">${rank || ''}</div></div>`).join('');
+  }
   scheduleSizeCells();
   fig.classList.remove('swapping');
   $('ltBody').classList.remove('swapping');
@@ -1477,6 +1512,12 @@ function sizeCells() {
   if (!wrap) return;
   const cells = [...wrap.querySelectorAll('.lt-cell')];
   if (!cells.length) return;
+  // schedule cells are a fixed lockup (crest + count + date); only stat cells get scaled
+  if (cells[0].classList.contains('sched')) {
+    const w = Math.max(200, Math.min(400, Math.floor(wrap.clientWidth / cells.length)));
+    cells.forEach(c => { c.style.width = w + 'px'; });
+    return;
+  }
   const n = cells.length;
   // measured after layout, never guessed — an early read here is what produced 32px numbers
   const avail = wrap.clientWidth;
@@ -1703,6 +1744,65 @@ async function buildTeamCardSet(teamId, teamName, year) {
   return cards;
 }
 
+// ---- next series -----------------------------------------------------------------------------
+
+const isoLocal = d =>                                    // built from local parts: toISOString()
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` +   // converts to UTC and can
+  `-${String(d.getDate()).padStart(2, '0')}`;                           // land on the wrong day
+
+const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function seriesDates(startIso, endIso) {
+  const [y1, m1, d1] = startIso.split('-').map(Number);
+  const [y2, m2, d2] = endIso.split('-').map(Number);
+  if (startIso === endIso) return `${MON[m1 - 1]} ${d1}`;
+  if (m1 === m2) return `${MON[m1 - 1]} ${d1}\u2013${d2}`;
+  return `${MON[m1 - 1]} ${d1} \u2013 ${MON[m2 - 1]} ${d2}`;      // series straddling a month
+}
+
+// Groups upcoming games into series runs. Consecutive games against the same opponent on the same
+// side of the ballpark are one series; gamesInSeries comes off the API so a series already in
+// progress still reports its true length rather than only what's left.
+async function buildScheduleCard(teamId, teamName, year) {
+  const from = new Date(), to = new Date();
+  to.setDate(to.getDate() + 60);                       // enough to clear an All-Star break
+  const d = await jc(`${API}/schedule?sportId=1&teamId=${teamId}` +
+                     `&startDate=${isoLocal(from)}&endDate=${isoLocal(to)}`);
+  const todayIso = isoLocal(from);
+  const games = [];
+  (d.dates || []).forEach(day => (day.games || []).forEach(g => {
+    if (g.gameType === 'S' || g.gameType === 'E') return;   // spring / exhibition
+    const date = (g.officialDate || g.gameDate || '').slice(0, 10);
+    if (!date || date < todayIso) return;
+    const home = g.teams.home.team, away = g.teams.away.team;
+    const isHome = home.id === +teamId;
+    const opp = isHome ? away : home;
+    games.push({ date, oppId: opp.id, oppName: opp.name, isHome,
+                 inSeries: +g.gamesInSeries || 0 });
+  }));
+  games.sort((a, b) => a.date.localeCompare(b.date));
+
+  const runs = [];
+  games.forEach(g => {
+    const last = runs[runs.length - 1];
+    if (last && last.oppId === g.oppId && last.isHome === g.isHome) {
+      last.end = g.date; last.count++;
+      last.inSeries = Math.max(last.inSeries, g.inSeries);
+    } else {
+      runs.push({ oppId: g.oppId, oppName: g.oppName, isHome: g.isHome,
+                  start: g.date, end: g.date, count: 1, inSeries: g.inSeries });
+    }
+  });
+
+  const series = runs.slice(0, 3).map(r => ({
+    oppId: r.oppId, oppName: r.oppName, home: r.isHome,
+    games: r.inSeries || r.count,
+    dates: seriesDates(r.start, r.end),
+  }));
+  if (!series.length) return null;
+  return { kind: 'team', id: +teamId, name: 'NEXT 3 SERIES', sub: `${year} SCHEDULE`,
+           label: '', hitLine: '', cells: [], series, specKey: 'sched', teamName };
+}
+
 // =====================================================================================
 // Team stats modal
 // =====================================================================================
@@ -1712,10 +1812,11 @@ let teamModalId = null, teamModalName = '', teamCards = [], teamSpecKey = 'batti
 const playerCycleOn = () => !!($('playerCycle') && $('playerCycle').checked);
 const teamCycleOn = () => !!($('teamCycle') && $('teamCycle').checked);
 
-async function openTeamModal(teamId) {
+async function openTeamModal(teamId, wantSpec) {
   const team = teamsById.get(+teamId);
   if (!team) return;
   teamModalId = +teamId; teamModalName = team.name; teamCards = [];
+  if (wantSpec) teamSpecKey = wantSpec;
   const year = $('season').value;
   $('teamModalLogo').src = logoURL(team.id);
   $('teamModalName').textContent = team.name;
@@ -1725,7 +1826,11 @@ async function openTeamModal(teamId) {
   $('teamModalBody').innerHTML = '<div class="modal-empty">Loading team stats…</div>';
   $('teamModalBackdrop').hidden = false;
 
-  const cards = await buildTeamCardSet(teamId, team.name, year);
+  const [cards, schedCard] = await Promise.all([
+    buildTeamCardSet(teamId, team.name, year),
+    buildScheduleCard(teamId, team.name, year).catch(() => null),
+  ]);
+  if (schedCard) cards.push(schedCard);
   if (teamModalId !== +teamId) return;          // switched teams while loading
   teamCards = cards;
   if (!cards.length) {
@@ -1751,6 +1856,16 @@ function paintTeamPills() {
 function paintTeamBody() {
   const card = teamCards.find(c => c.specKey === teamSpecKey);
   if (!card) { $('teamModalBody').innerHTML = '<div class="modal-empty">No stats in this category.</div>'; return; }
+  if (card.series) {
+    const rows = card.series.map(sx =>
+      `<div class="sx-row">` +
+      `<img class="sx-logo" src="${logoURL(sx.oppId)}" alt="" onerror="this.remove()">` +
+      `<div class="sx-meta"><div class="sx-opp">${sx.home ? 'vs' : 'at'} ${sx.oppName}</div>` +
+      `<div class="sx-games">${sx.games} game${sx.games === 1 ? '' : 's'}</div>` +
+      `<div class="sx-date">${sx.dates}</div></div></div>`).join('');
+    $('teamModalBody').innerHTML = `<div class="modal-section"><h3>${card.name}</h3>${rows}</div>`;
+    return;
+  }
   const grid = statGrid(card.cells.map(([k, v, rank]) => [rank ? `${k} · ${rank}` : k, v]));
   $('teamModalBody').innerHTML = `<div class="modal-section"><h3>${card.name}</h3>${grid}</div>`;
 }

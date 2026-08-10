@@ -57,6 +57,16 @@ rather than trusting a sort parameter to mean what we want, and the direction is
 `strikeOuts` is good for a staff and bad for a lineup, and `avg` is the batting average in a hitting
 split but the average *against* in a pitching one. Ties share a rank.
 
+**Next 3 series** — **■ Next 3 Series** on the team's roster. The graphic shows the next three
+opponents as crests, each with how many games the series is, and the dates in the smallest type
+underneath. `VS` or `AT` sits above the crest, because a series graphic that doesn't say who's
+hosting is misleading.
+
+Series are grouped from the schedule by runs of consecutive games against the same opponent on the
+same side of the ballpark. The game count comes from the API's own `gamesInSeries`, so a series
+already in progress still reports its true length rather than only what's left, and a series with
+an off day in the middle (3 games across Aug 13–16) still reads as one series.
+
 **Cycling** — both the player card and the team card have a **Cycle** checkbox and a seconds box
 (default 7). On, the graphic rotates through every split or category; off, whatever you've selected
 stays up indefinitely. Splits with no data are dropped rather than cycled as blank screens, so an
