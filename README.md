@@ -99,6 +99,16 @@ same building. Nothing to install.
 
 That's it. The topic is remembered, so next show you just open the page and it reconnects itself.
 
+**Driving from a different computer?** The remembered topic lives in `localStorage`, which is per
+browser on per machine — open the bare control page somewhere new and it suggests a *fresh* topic,
+so you'd connect to the wrong one while OBS sits dark on the old one and everything looks green.
+Use **Copy Control URL** instead. That link carries the topic, so it comes up already connected
+anywhere you open it. Bookmark it and it's the only link you need:
+
+```
+https://robsjomboy.github.io/mlb_stats/?topic=your-topic-name
+```
+
 ```
 https://robsjomboy.github.io/mlb_stats/index.html?display=1&topic=tb-snapshot-2kb024
 ```

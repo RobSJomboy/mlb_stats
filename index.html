@@ -340,6 +340,7 @@
     <button id="connectBtn" class="connect-btn" type="button">Connect</button>
     <span class="conn-pill" id="connStatus">not connected</span>
     <button id="copyDisplayBtn" type="button" disabled>Copy Display URL</button>
+    <button id="copyControlBtn" type="button" disabled title="A control link with the topic baked in — opens connected on any computer">Copy Control URL</button>
     <span class="hint" id="connHint"></span>
   </div>
   <div class="obsurl" id="obsUrl" hidden>
@@ -1141,6 +1142,7 @@ function setConn(ok) {
   pill.classList.toggle('ok', !!ok);
   pill.textContent = ok ? 'connected' : (TOPIC ? 'not reaching topic' : 'not connected');
   $('copyDisplayBtn').disabled = !TOPIC;
+  $('copyControlBtn').disabled = !TOPIC;
   // A red pill on its own is easy to miss, and the consequence isn't obvious: OBS goes stale while
   // the control page keeps working, and "Open Display" keeps working too because same-browser tabs
   // never touch the network. Say the actual consequence.
@@ -1876,6 +1878,18 @@ function updateConnHint() {
 
 $('connectBtn').onclick = connectTopic;
 $('topicInput').onkeydown = e => { if (e.key === 'Enter') connectTopic(); };
+// A control link carrying the topic, so opening it on another machine comes up already connected
+// instead of inventing a new topic and silently leaving OBS dark.
+function controlURL() {
+  return `${location.href.split(/[?#]/)[0]}?topic=${encodeURIComponent(TOPIC)}`;
+}
+$('copyControlBtn').onclick = () => {
+  const btn = $('copyControlBtn'), url = controlURL();
+  copyText(url)
+    .then(() => { btn.textContent = 'Copied ✓'; })
+    .catch(() => { prompt('Copy this URL:', url); })
+    .finally(() => setTimeout(() => { btn.textContent = 'Copy Control URL'; }, 1600));
+};
 $('copyDisplayBtn').onclick = () => {
   const btn = $('copyDisplayBtn'), url = displayURL();
   copyText(url)
@@ -1923,14 +1937,30 @@ if (isDisplayMode) {
   if (stamp) stamp.textContent = document.lastModified || 'unknown';
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
 
-  // Reconnect to last show's topic automatically; first run gets a suggested one so the only
-  // step is clicking Connect. The random tail matters — an ntfy topic is public to anyone who
+  // Topic precedence: the URL wins, then this browser's last show, then a fresh suggestion.
+  //
+  // The URL mattering is the point. The saved topic lives in localStorage, which is per browser on
+  // per machine — so opening the control page on a different computer used to hand you a NEW random
+  // topic, and you'd connect to it, and OBS would sit dark on the old one with everything looking
+  // green. Putting ?topic= in the URL makes a control link portable: bookmark it, open it anywhere,
+  // it connects to the same topic OBS is already watching.
+  //
+  // The random tail on a fresh suggestion still matters — an ntfy topic is public to anyone who
   // knows its name, so a guessable one is a stranger's write access to your lower third.
   let saved = '';
   try { saved = localStorage.getItem(TOPIC_KEY) || ''; } catch {}
-  $('topicInput').value = saved || `tb-snapshot-${Math.random().toString(36).slice(2, 8)}`;
-  if (saved) { TOPIC = saved; setConn(false); publishTopic(null); }
-  else setConn(false);
+  const fromUrl = params.get('topic') || '';
+  const startTopic = fromUrl || saved;
+  $('topicInput').value = startTopic || `tb-snapshot-${Math.random().toString(36).slice(2, 8)}`;
+  if (startTopic) {
+    TOPIC = startTopic;
+    try { localStorage.setItem(TOPIC_KEY, TOPIC); } catch {}   // so this machine remembers it too
+    setConn(false);        // provisional until a publish confirms; keeps the relay fallback visible
+    publishTopic(null);
+  } else {
+    TOPIC = '';
+    setConn(false);
+  }
   updateConnHint();
   // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone
   // Ctrl+C's it — the chip needs to go grey before he clicks a player and wonders why OBS froze.
