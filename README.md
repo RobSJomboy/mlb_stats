@@ -79,6 +79,23 @@ cycle isn't nine posts a minute at ntfy, and the pacing stays smooth regardless 
 the lower third without first digging back into whichever player or team is up. The card set stays
 loaded, so clicking back to LIVE puts the same graphic straight back on screen.
 
+**Custom date range** — **Stats from / to** in the header. Leave the end blank for "from this date
+until now". It applies to whatever you're looking at: players get a **Custom Range** pill, and team
+stats are recomputed — ranks included — over that window.
+
+Two things the API can't do over a date range, handled rather than faked:
+
+- **Starters and relievers can't be separated over a window.** The endpoint accepts `sitCodes`
+  alongside `byDateRange` and then silently ignores them, returning the whole staff. So with a range
+  active those two categories collapse into one honest **Pitching Staff** card instead of labelling
+  undifferentiated numbers "Starting Pitching".
+- **Vs-lefties / vs-righties are season-long for the same reason.** Those pills stay available and
+  are relabelled `(SEASON)` so nothing on screen claims to be windowed when it isn't.
+
+**Live preview** — the control page shows what OBS is showing, as a scaled-down copy of the actual
+display page on the actual topic. Not a mock: a mock drifts from the real thing exactly when it
+matters, and this way "it looks wrong here" means it looks wrong on air.
+
 **Season picker** goes back to 2014.
 
 ---
@@ -230,6 +247,24 @@ Shared with the rest of the Talkin' Baseball tools:
 - Navy `#0d1f2d` → `#173a56`, gold `#fbcc7a`
 - Bebas Neue for names and numbers, DM Sans for body copy, DM Mono for labels
 - Gold rule across the top of the lower third, gold ring on the headshot
+
+The bar floats: 250px tall, inset 60px each side, sitting **150px above the bottom** of a 1920×1080
+frame, with a 20px radius and a drop shadow.
+
+**Motion is layered on purpose.** Coming on air it pushes up from below and settles on an
+ease-out; going off it drops back down. Once it's up, the box itself never moves again — a stat
+change fades only the parts that changed:
+
+| Layer | When it fades |
+|---|---|
+| Box (background, curve, shadow) | only on air / off air |
+| Headshot or crest | only when the picture actually differs |
+| Name / category | team categories yes, **player names never** |
+| Stats | every change |
+
+A player's name is identity, so it hard-cuts rather than fading — cycling their splits leaves the
+name rock steady instead of pulsing once per rotation. A team card's headline *is* the content, so
+it cross-fades with the numbers.
 
 ---
 

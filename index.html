@@ -249,6 +249,29 @@
     text-transform:uppercase;color:var(--text3);flex-basis:100%}
   .connect .hint.warn{color:var(--red)}
 
+  /* ---- live preview: the display view itself, scaled down ---- */
+  .preview{margin-top:14px}
+  .preview-head{display:flex;align-items:center;gap:11px;margin-bottom:7px}
+  .preview-head .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--gold);opacity:.85}
+  .preview-note{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--text3)}
+  .preview-head button{padding:5px 11px;font-size:9px}
+  /* 1920x1080 rendered at 0.25 — the real display page, not a mock, so what's here is what OBS
+     has. The checker underneath stands in for whatever the graphic will key over. */
+  .preview-stage{position:relative;width:480px;height:270px;border:1px solid var(--border);
+    border-radius:var(--radius);overflow:hidden;
+    background-color:#243447;
+    background-image:linear-gradient(45deg,#1b2736 25%,transparent 25%,transparent 75%,#1b2736 75%),
+      linear-gradient(45deg,#1b2736 25%,transparent 25%,transparent 75%,#1b2736 75%);
+    background-size:20px 20px;background-position:0 0,10px 10px}
+  .preview-stage iframe{width:1920px;height:1080px;border:0;transform:scale(.25);
+    transform-origin:top left;position:absolute;top:0;left:0;pointer-events:none}
+  .preview-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--text3);text-align:center;padding:0 20px}
+  .preview-empty[hidden]{display:none}
+
   /* ---- the URL to paste into the OBS machine's Browser Source ---- */
   .obsurl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
     background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius);
@@ -271,20 +294,30 @@
   /* The background never animates. Only the figure and the body fade, and the figure only when
      the picture actually changes — cycling a team's categories keeps the same crest, so fading it
      would read as a flicker on something that didn't change. */
-  .lt-bar{display:flex;align-items:center;gap:26px;position:absolute;left:0;right:0;bottom:60px;
-    height:250px;padding:0 44px;background-color:#0d1f2d;
+  .lt-bar{display:flex;align-items:center;gap:26px;position:absolute;left:60px;right:60px;
+    bottom:150px;height:250px;padding:0 44px;background-color:#0d1f2d;
     background-image:linear-gradient(#fbcc7a,#fbcc7a),
       linear-gradient(90deg,#0d1f2d 0%,#173a56 55%,#0d2233 100%);
     background-repeat:no-repeat,no-repeat;background-size:100% 7px,100% 100%;
     background-position:top left,top left;
-    box-sizing:border-box;opacity:0;pointer-events:none;transition:opacity .35s ease}
-  .lt-bar.lt-visible{opacity:1}
+    border-radius:20px;overflow:hidden;      /* so the gold rule follows the curve */
+    box-shadow:0 22px 60px rgba(0,0,0,.5), 0 4px 16px rgba(0,0,0,.3);
+    box-sizing:border-box;pointer-events:none;
+    /* coming on air it pushes up from below and settles; going off it drops back down. The ease
+       is deliberately asymmetric — quick to leave the bottom, slow to settle. */
+    opacity:0;transform:translateY(150px);
+    transition:opacity .34s ease, transform .52s cubic-bezier(.16,.84,.32,1)}
+  .lt-bar.lt-visible{opacity:1;transform:translateY(0)}
 
   .lt-figure{flex:none;opacity:1;transition:opacity .22s ease}
   .lt-figure.swapping{opacity:0}
-  .lt-body{flex:1;display:flex;align-items:center;gap:26px;min-width:0;
-    opacity:1;transition:opacity .22s ease}
-  .lt-body.swapping{opacity:0}
+  .lt-body{flex:1;display:flex;align-items:center;gap:26px;min-width:0}
+  /* Identity and content fade independently. A player's name is identity and must not flicker
+     while their splits cycle underneath it; a team card's headline IS the content, so it fades. */
+  .lt-info{opacity:1;transition:opacity .22s ease}
+  .lt-info.swapping{opacity:0}
+  .lt-stats{opacity:1;transition:opacity .22s ease}
+  .lt-stats.swapping{opacity:0}
 
   .lt-headshot{width:184px;height:184px;border-radius:50%;object-fit:cover;background:#173a56;
     border:5px solid #fbcc7a;flex:none;display:block}
@@ -349,6 +382,9 @@
     <div><label>OBS Display</label>
       <button id="openDisplay" type="button">Open Display ↗</button>
     </div>
+    <div><label for="rangeStart">Stats from</label><input id="rangeStart" type="date"></div>
+    <div><label for="rangeEnd">to (blank = today)</label><input id="rangeEnd" type="date"></div>
+    <div><label>&nbsp;</label><button id="rangeClear" type="button">Clear Range</button></div>
     <div><label>Relay</label>
       <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
     </div>
@@ -367,6 +403,17 @@
     <code id="obsUrlText"></code>
     <button id="obsUrlCopy" type="button">Copy</button>
     <span class="hint" id="obsUrlHint">Paste into the Browser Source on the OBS computer · 1920×1080</span>
+  </div>
+  <div class="preview" id="previewBox">
+    <div class="preview-head">
+      <span class="k">Live Preview</span>
+      <span class="preview-note" id="previewNote">what OBS is showing right now</span>
+      <button id="previewRefresh" type="button">Refresh</button>
+    </div>
+    <div class="preview-stage" id="previewStage">
+      <iframe id="previewFrame" title="Live preview" scrolling="no"></iframe>
+      <div class="preview-empty" id="previewEmpty">Connect a topic to load the preview</div>
+    </div>
   </div>
   <div class="onair" id="onair" hidden>
     <span class="onair-dot"></span>
@@ -439,12 +486,12 @@
       <img id="ltHeadshot" class="lt-headshot" alt="">
     </div>
     <div class="lt-body" id="ltBody">
-      <div class="lt-info">
+      <div class="lt-info" id="ltIdent">
         <div class="lt-name" id="ltName"></div>
         <div class="lt-sub" id="ltSub"></div>
       </div>
       <div class="lt-divider"></div>
-      <div class="lt-stats">
+      <div class="lt-stats" id="ltStats">
         <div class="lt-hitline" id="ltHitline"></div>
         <div class="lt-cells" id="ltCells"></div>
       </div>
@@ -829,6 +876,16 @@ const TF = [
   ['vr', 'VS RIGHTIES'],
 ];
 const isSplitTf = tf => tf === 'vl' || tf === 'vr';
+// The pill list gains a custom-range entry while a range is set. vs-L/R stay season-long and get
+// relabelled to say so — the API silently ignores sitCodes on a date range and hands back the
+// undifferentiated line, so a "VS LHP" pill over a window would be quietly wrong.
+function activeTF() {
+  if (!rangeActive()) return TF;
+  // Full season stays in the list — comparing a window against the season is the whole point of
+  // having a window.
+  return [['range', 'CUSTOM RANGE'],
+          ...TF.map(([k, l]) => isSplitTf(k) ? [k, l + ' (SEASON)'] : [k, l])];
+}
 let modalPid = null, modalRow = null, modalTf = 'season';
 let modalBat = null, modalPit = null;  // currently-loaded stat objects for the active timeframe
 
@@ -896,6 +953,23 @@ function apiPitchingSplitBlock(st) {
                 ['H', st.hits], ['BF', st.battersFaced], ['K%', kPct(st.strikeOuts, st.battersFaced)]]);
 }
 
+// A custom window applied to whatever you're looking at. Empty end means "through today", which is
+// the "from this date until now" case.
+let rangeStart = '', rangeEnd = '';
+const rangeActive = () => !!rangeStart;
+const rangeTo = () => rangeEnd || isoLocalToday();
+const isoLocalToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+function rangeLabel() {
+  const pretty = iso => {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${MON[m - 1]} ${d}`;
+  };
+  return rangeEnd ? `${pretty(rangeStart)} \u2013 ${pretty(rangeEnd)}` : `SINCE ${pretty(rangeStart)}`;
+}
+
 function fmtDate(d) { return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; }
 function dateRangeForDays(n) {
   const end = new Date(); const start = new Date(); start.setDate(start.getDate() - n);
@@ -904,6 +978,7 @@ function dateRangeForDays(n) {
 // group is 'hitting' | 'pitching' | omitted — the vs-L/R label reads differently depending on
 // which side of the ball it's describing (a hitter faces LHP, a pitcher faces LHB)
 function tfLabel(tf, year, group) {
+  if (tf === 'range') return rangeLabel();
   if (tf === 'season') return `${year} SEASON`;
   if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
   if (tf === 'vr') return group === 'pitching' ? 'VS RHB' : 'VS RHP';
@@ -916,6 +991,8 @@ async function fetchStat(pid, group, tf, year) {
     url = `${API}/people/${pid}/stats?stats=season&season=${year}&group=${group}`;
   } else if (isSplitTf(tf)) {
     url = `${API}/people/${pid}/stats?stats=statSplits&sitCodes=${tf}&season=${year}&group=${group}`;
+  } else if (tf === 'range') {
+    url = `${API}/people/${pid}/stats?stats=byDateRange&startDate=${rangeStart}&endDate=${rangeTo()}&season=${year}&group=${group}`;
   } else {
     const { startDate, endDate } = dateRangeForDays(+tf);
     url = `${API}/people/${pid}/stats?stats=byDateRange&startDate=${startDate}&endDate=${endDate}&season=${year}&group=${group}`;
@@ -931,7 +1008,8 @@ function wantsPitching(row) { return row.pos === 'P' || row.pos === 'TWP'; }
 async function openPlayerModal(pid) {
   const row = currentIndex.get(String(pid));
   if (!row) return;
-  modalPid = pid; modalRow = row; modalTf = 'season';
+  modalPid = pid; modalRow = row;
+  modalTf = rangeActive() ? 'range' : 'season';   // land on the window he set, not past it
   $('modalDlNote').textContent = '';
   $('modalHeadshot').src = headshotURL(pid);
   $('modalName').textContent = row.name;
@@ -943,7 +1021,7 @@ async function openPlayerModal(pid) {
 
 function paintTfPills() {
   const box = $('tfPills'); box.innerHTML = '';
-  TF.forEach(([key, label]) => {
+  activeTF().forEach(([key, label]) => {
     const b = el('button', 'tf-pill' + (key === modalTf ? ' on' : ''), label);
     b.type = 'button';
     b.onclick = () => { modalTf = key; paintTfPills(); loadModalStats(); };
@@ -1157,6 +1235,7 @@ function refreshObsPanel() {
   const box = $('obsUrl'); if (!box) return;
   box.hidden = !show;
   if (show) loadObsUrl();
+  loadPreview();
 }
 
 function setConn(ok) {
@@ -1324,7 +1403,7 @@ function playerCard(row, pid, bat, pit, tf, year) {
 // screens of nothing.
 async function buildPlayerCardSet(pid, row, year) {
   const doBat = wantsBatting(row), doPit = wantsPitching(row);
-  const results = await Promise.all(TF.map(async ([tf]) => {
+  const results = await Promise.all(activeTF().map(async ([tf]) => {
     const [bat, pit] = await Promise.all([
       doBat ? fetchStat(pid, 'hitting', tf, year).catch(() => null) : null,
       doPit ? fetchStat(pid, 'pitching', tf, year).catch(() => null) : null,
@@ -1438,7 +1517,9 @@ function paintCard(card) {
   }
   scheduleSizeCells();
   fig.classList.remove('swapping');
-  $('ltBody').classList.remove('swapping');
+  $('ltIdent').classList.remove('swapping');
+  $('ltStats').classList.remove('swapping');
+  $('ltIdent').dataset.ident = card.name || '';
   $('ltBar').classList.add('lt-visible');
   ltVisible = true;
 }
@@ -1451,10 +1532,15 @@ function swapToCard(i) {
   clearTimeout(ltFadeTimer);
   if (!ltVisible) { paintCard(card); return; }
 
-  const fig = $('ltFigure'), body = $('ltBody');
+  const fig = $('ltFigure'), ident = $('ltIdent'), stats = $('ltStats');
   const imgChanges = fig.dataset.src !== cardImage(card);
-  body.classList.add('swapping');
+  // A team card's headline is the category — that's content, so it cross-fades with the numbers.
+  // A player's name is identity: it hard-cuts rather than fading, so cycling their splits leaves
+  // the name rock steady instead of pulsing once per rotation.
+  const identFades = card.kind === 'team' && ident.dataset.ident !== (card.name || '');
+  stats.classList.add('swapping');
   if (imgChanges) fig.classList.add('swapping');
+  if (identFades) ident.classList.add('swapping');
   ltFadeTimer = setTimeout(() => paintCard(card), LT_SWAP_MS);
 }
 
@@ -1558,9 +1644,9 @@ window.addEventListener('resize', scheduleSizeCells);
 // state and re-measure rather than trusting an interrupted transition to have finished.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  const fig = $('ltFigure'), body = $('ltBody');
-  if (fig) fig.classList.remove('swapping');
-  if (body) body.classList.remove('swapping');
+  ['ltFigure', 'ltIdent', 'ltStats'].forEach(id => {
+    const n = $(id); if (n) n.classList.remove('swapping');
+  });
   scheduleSizeCells();
 });
 
@@ -1688,6 +1774,20 @@ const TEAM_SPECS = [
     cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1], ['CS%','caughtStealingPercentage',1]] },
 ];
 
+// Over a custom window the starter/reliever split is unavailable — the API accepts sitCodes
+// alongside byDateRange and then ignores them, handing back the whole staff. Rather than label
+// undifferentiated numbers "STARTING PITCHING", the two categories collapse into one honest
+// PITCHING STAFF card whenever a range is active.
+const TEAM_SPECS_RANGE = [
+  { key: 'batting', label: 'TEAM BATTING', group: 'hitting', sit: null,
+    cells: [['AVG','avg',1], ['OBP','obp',1], ['SLG','slg',1], ['OPS','ops',1], ['R','runs',1], ['HR','homeRuns',1]] },
+  { key: 'staff', label: 'PITCHING STAFF', group: 'pitching', sit: null,
+    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['BAA','avg',-1], ['IP','inningsPitched',1]] },
+  { key: 'def', label: 'TEAM DEFENSE', group: 'fielding', sit: null,
+    cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1], ['CS%','caughtStealingPercentage',1]] },
+];
+const teamSpecs = () => (rangeActive() ? TEAM_SPECS_RANGE : TEAM_SPECS);
+
 const ordinal = n => {
   const s = ['th','st','nd','rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -1696,9 +1796,12 @@ const ordinal = n => {
 // One request per category returns all 30 clubs, so ranks are computed here rather than trusting
 // a sortStat parameter to mean what we want.
 async function fetchTeamGroup(spec, year) {
-  const url = spec.sit
-    ? `${API}/teams/stats?season=${year}&group=${spec.group}&stats=statSplits&sitCodes=${spec.sit}&sportIds=1`
-    : `${API}/teams/stats?season=${year}&group=${spec.group}&stats=season&sportIds=1`;
+  const url = rangeActive()
+    ? `${API}/teams/stats?season=${year}&group=${spec.group}&stats=byDateRange` +
+      `&startDate=${rangeStart}&endDate=${rangeTo()}&sportIds=1`
+    : spec.sit
+      ? `${API}/teams/stats?season=${year}&group=${spec.group}&stats=statSplits&sitCodes=${spec.sit}&sportIds=1`
+      : `${API}/teams/stats?season=${year}&group=${spec.group}&stats=season&sportIds=1`;
   const d = await jc(url);
   const sec = (d.stats || [])[0];
   return (sec && sec.splits) || [];
@@ -1721,9 +1824,10 @@ function rankMap(splits, field, dir) {
 
 // Returns one card per category, cells labelled with the club's rank: "ERA · 4TH".
 async function buildTeamCardSet(teamId, teamName, year) {
-  const groups = await Promise.all(TEAM_SPECS.map(spec => fetchTeamGroup(spec, year).catch(() => [])));
+  const specs = teamSpecs();
+  const groups = await Promise.all(specs.map(spec => fetchTeamGroup(spec, year).catch(() => [])));
   const cards = [];
-  TEAM_SPECS.forEach((spec, gi) => {
+  specs.forEach((spec, gi) => {
     const splits = groups[gi];
     const mine = splits.find(sp => sp.team && sp.team.id === +teamId);
     if (!mine) return;
@@ -1738,8 +1842,9 @@ async function buildTeamCardSet(teamId, teamName, year) {
     // The crest identifies the club, so the headline is the category — it's the thing that changes
     // as the cycle runs, and it's what a host reading off the monitor needs to see.
     cards.push({ kind: 'team', id: +teamId, name: spec.label,
-                 sub: `${year} \u00b7 MLB RANK OF ${total}`, label: '', hitLine: '',
-                 cells, specKey: spec.key, teamName });
+                 sub: rangeActive() ? `${rangeLabel()} \u00b7 MLB RANK OF ${total}`
+                                    : `${year} \u00b7 MLB RANK OF ${total}`,
+                 label: '', hitLine: '', cells, specKey: spec.key, teamName });
   });
   return cards;
 }
@@ -2012,6 +2117,49 @@ $('copyDisplayBtn').onclick = () => {
     .catch(() => { prompt('Copy this URL:', url); })
     .finally(() => setTimeout(() => { btn.textContent = 'Copy Display URL'; }, 1600));
 };
+// The preview loads the display page the same way OBS does — same topic, same code path. A mock
+// would drift from the real thing exactly when it matters, and this way "it looks wrong here"
+// means it looks wrong on air.
+let previewSrc = null;
+function loadPreview(force) {
+  const frame = $('previewFrame'), empty = $('previewEmpty');
+  if (!frame) return;
+  if (!TOPIC && !relayLive) { frame.removeAttribute('src'); previewSrc = null; empty.hidden = false; return; }
+  const base = TOPIC ? displayURL()
+                     : `${location.href.split(/[?#]/)[0]}?display=1&src=server`;
+  if (!force && base === previewSrc) return;   // don't reload on every probe; it would restart cycles
+  previewSrc = base;
+  empty.hidden = true;
+  frame.src = base + (base.includes('?') ? '&' : '?') + 'preview=1&_=' + Date.now();
+}
+$('previewRefresh').onclick = () => loadPreview(true);
+
+function applyRange() {
+  rangeStart = $('rangeStart').value || '';
+  rangeEnd = $('rangeEnd').value || '';
+  if (rangeStart && rangeEnd && rangeEnd < rangeStart) {   // swap rather than fetch nothing
+    [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
+    $('rangeStart').value = rangeStart; $('rangeEnd').value = rangeEnd;
+  }
+  jCache.clear();                       // cached URLs were built from the old window
+  if (!$('modalBackdrop').hidden && modalPid) {
+    if (rangeActive()) modalTf = 'range';
+    else if (modalTf === 'range') modalTf = 'season';
+    paintTfPills(); loadModalStats();
+  }
+  if (!$('teamModalBackdrop').hidden && teamModalId) {
+    if (rangeActive() && (teamSpecKey === 'sp' || teamSpecKey === 'rp')) teamSpecKey = 'staff';
+    else if (!rangeActive() && teamSpecKey === 'staff') teamSpecKey = 'batting';
+    guard(openTeamModal)(teamModalId, teamSpecKey);
+  }
+}
+$('rangeStart').onchange = applyRange;
+$('rangeEnd').onchange = applyRange;
+$('rangeClear').onclick = () => {
+  $('rangeStart').value = ''; $('rangeEnd').value = '';
+  applyRange();
+};
+
 $('obsUrlCopy').onclick = () => {
   const btn = $('obsUrlCopy');
   copyText($('obsUrlText').textContent)
@@ -2083,6 +2231,7 @@ if (isDisplayMode) {
     .then(r => setFeed(r.ok)).catch(() => setFeed(false));
   probe();
   setInterval(probe, RELAY_PROBE_MS);
+  loadPreview();
   guard(async () => {
     say('Loading teams…');
     await Promise.all([loadTeams($('season').value), loadPlayerIndex($('season').value)]);
