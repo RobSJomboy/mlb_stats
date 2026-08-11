@@ -301,3 +301,36 @@ it cross-fades with the numbers.
   Every payload is fingerprinted (excluding its timestamp) and duplicates are dropped before they
   touch the DOM. Without that guard each duplicate restarted the fade, which showed up as a
   graphic flickering while it just sat there.
+
+---
+
+## All-JM (`alljm.html`)
+
+A separate tool for the monthly All-JM episode, living in this repo purely so it's already served
+by the Pages site — it shares nothing with Trade Snapshot but the house look and the ntfy
+transport. Different show, different graphic, its own topic.
+
+**Control:** `alljm.html?topic=your-topic` · **OBS:** `alljm.html?output=1&topic=your-topic`
+
+The on-air panel is deliberately the **same geometry as MLB_Standings** — 1920×1080 transparent,
+528×1004 pinned right at `top:38px`, Rift, gold `#c8a84b`, same slide-in — so it drops into that
+Browser Source without re-aligning anything.
+
+- **14 slots per league**: C, 1B, 2B, 3B, SS, LF, CF, RF, DH, SP, RP, plus three UTIL spots for the
+  fan vote. Search fills a slot; **Lock In** puts it on the board.
+- **Petals.** Locking a player in for a month awards a silver petal. Unlocking takes it back —
+  otherwise a mis-click quietly inflates someone's flower for the rest of the season. Win *every*
+  month taped so far and the petals become **The Silver Daisy**, a full flower with a gold centre.
+  A sweep needs at least two months on the board, so nobody gets one in the season's first episode.
+- **Bottom scroll** announcing each lock-in with headshot, club, month and petals, in the same
+  lockup as the trade-deadline ticker. Toggle with **▶ Ticker**.
+- **Judge Jomboy** for the ones Trev and Jake can't agree on: mark a slot contested, the slot's
+  player becomes Trev's pick, search Jake's alongside it, then **⚖ Send to Judge**. The card shows
+  both. **Rule: Trev / Rule: Jake** greys out the loser, lights the winner gold, bangs the gavel —
+  and puts the winner in the slot, locked, petal awarded. The ruling *is* the decision.
+- Everything on the wire is absolute state with a sequence number, same as the standings build, so
+  a duplicated or late message can't leave the screen disagreeing with the control page.
+
+Rosters and petal history live in `localStorage` on the control machine, keyed by season and month,
+so last month's board is still there next time. **That means the history is per browser** — drive
+from the same machine each month, or the petals won't follow.
