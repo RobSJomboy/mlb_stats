@@ -96,6 +96,10 @@ Two things the API can't do over a date range, handled rather than faked:
 display page on the actual topic. Not a mock: a mock drifts from the real thing exactly when it
 matters, and this way "it looks wrong here" means it looks wrong on air.
 
+The player and team cards open **beside** the preview rather than over the page, so the roster
+you're working through, the card you're reading, and what's on air are all visible at once. One
+card is in the slot at a time. Close with the × or Escape.
+
 **Season picker** goes back to 2014.
 
 ---
