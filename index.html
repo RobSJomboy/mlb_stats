@@ -136,11 +136,40 @@
   /* The card sits beside the preview rather than covering the page — you can see the roster you
      are working through and what is on air at the same time. */
   .workspace{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;padding:16px 22px 0}
-  .modal-backdrop{display:block;flex:0 1 520px;min-width:340px}
+  /* The card takes the empty space to the RIGHT rather than running down the page, and its bottom
+     lines up with the preview: 24px head + 7px gap + 270px stage = 301. */
+  .modal-backdrop{display:block;flex:1 1 620px;min-width:520px;max-width:1180px}
   .modal-backdrop[hidden]{display:none}
   .modal{background:var(--navy-dark);border:1px solid var(--border2);border-radius:var(--radius-lg);
-    width:100%;max-height:74vh;overflow:auto;padding:22px;position:relative;
-    box-shadow:0 14px 40px rgba(0,0,0,.45)}
+    width:100%;height:301px;overflow:auto;padding:16px 18px;position:relative;
+    box-shadow:0 14px 40px rgba(0,0,0,.45);
+    /* identity down the left, everything else stacked to its right */
+    display:grid;grid-template-columns:150px 1fr;gap:9px 18px;align-content:start}
+  .modal-head{grid-column:1;grid-row:1 / span 5;align-self:start;flex-direction:column;
+    text-align:center;gap:9px;margin:0;padding:0}
+  .modal-headshot{width:88px;height:88px}
+  .modal-name{font-size:23px;line-height:1.02}
+  .modal-sub{font-size:9px;margin-top:5px;letter-spacing:.1em}
+  .modal .tf-pills{grid-column:2;margin:0}
+  .modal .cycle-row{grid-column:2;margin:0;padding:7px 10px}
+  .modal-body{grid-column:2;min-width:0}
+  .modal .modal-export-row{grid-column:2;margin:0}
+  .modal-dlnote{grid-column:2;margin:0;text-align:left}
+  .modal .modal-section{margin-bottom:0}
+  .modal .modal-section h3{margin-bottom:6px}
+  .modal .modal-line{font-size:13px;margin-bottom:7px}
+  .modal .modal-hitline{font-size:16px;margin-bottom:4px}
+  .modal .tf-pill{padding:5px 10px;font-size:8.5px}
+  .modal .stat-grid{grid-template-columns:repeat(auto-fit,minmax(74px,1fr))}
+  .modal .stat-grid .cell{padding:6px 3px}
+  .modal .stat-grid .cell .v{font-size:20px}
+  .modal .stat-grid .cell .k{font-size:8px;margin-top:4px}
+  .modal .sx-row{padding:6px 9px;margin-bottom:5px}
+  .modal .modal-export-btn{padding:8px 13px;font-size:14px}
+  @media (max-width:1100px){
+    .modal-backdrop{flex:1 1 100%;min-width:0}
+    .modal{height:auto;max-height:none}
+  }
   @media (max-width:900px){ .workspace{padding:14px 16px 0} }
   .modal-close{position:absolute;top:12px;right:12px;background:none;border:1px solid var(--border);
     color:var(--text2);width:28px;height:28px;border-radius:50%;font-size:16px;line-height:1;
