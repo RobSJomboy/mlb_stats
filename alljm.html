@@ -72,11 +72,12 @@
   .jm-shot{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;
     background:#173a56;border:2px solid var(--air-gold)}
   .jm-who{flex:1;min-width:0}
-  .jm-name{font-family:var(--font-air);font-weight:700;font-size:27px;color:#fff;
+  .jm-who{display:flex;align-items:baseline;gap:9px}
+  .jm-name{font-family:var(--font-air);font-weight:700;font-size:35px;color:#fff;
     text-transform:uppercase;line-height:1;white-space:nowrap;overflow:hidden;
     text-overflow:ellipsis;text-shadow:0 2px 3px rgba(0,0,0,.8)}
-  .jm-team{font-family:var(--font-air);font-size:15px;color:rgba(255,255,255,.62);
-    text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+  .jm-team{font-family:var(--font-air);font-weight:700;font-size:19px;color:var(--air-gold);
+    text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
   .jm-empty{font-family:var(--font-air);font-size:22px;color:rgba(255,255,255,.25);
     text-transform:uppercase;letter-spacing:2px}
   .jm-util .jm-pos{font-size:17px;color:#9fb4cc}
@@ -93,6 +94,30 @@
     background:var(--air-gold);border-radius:50%;box-shadow:0 0 8px rgba(200,168,75,.9)}
   .daisy.spin{animation:daisySpin 6s linear infinite}
   @keyframes daisySpin{to{transform:rotate(360deg)}}
+
+  /* ── the ruling, as a lower third rather than a full-screen card ── */
+  #verdictLT{position:absolute;left:60px;right:60px;bottom:150px;
+    opacity:0;transform:translateY(150px);pointer-events:none;
+    transition:opacity .34s ease, transform .52s cubic-bezier(.16,.84,.32,1)}
+  #verdictLT.visible{opacity:1;transform:translateY(0)}
+  .vlt-bar{display:flex;align-items:center;gap:26px;height:200px;padding:0 40px;
+    background-color:#0d1f2d;
+    background-image:linear-gradient(var(--air-gold),var(--air-gold)),
+      linear-gradient(90deg,#0d1f2d 0%,#173a56 55%,#0d2233 100%);
+    background-repeat:no-repeat,no-repeat;background-size:100% 7px,100% 100%;
+    background-position:top left,top left;
+    border-radius:20px;overflow:hidden;box-shadow:0 22px 60px rgba(0,0,0,.5)}
+  .vlt-shot{width:150px;height:150px;border-radius:50%;object-fit:cover;flex-shrink:0;
+    background:#173a56;border:4px solid var(--air-gold)}
+  .vlt-body{flex:1;min-width:0}
+  .vlt-kicker{font-family:var(--font-air);font-weight:700;font-size:24px;letter-spacing:6px;
+    color:var(--air-gold);text-transform:uppercase}
+  .vlt-name{font-family:var(--font-air);font-weight:700;font-size:74px;line-height:1;
+    text-transform:uppercase;margin-top:8px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;text-shadow:0 2px 6px rgba(0,0,0,.8)}
+  .vlt-right{display:flex;flex-direction:column;align-items:flex-end;gap:11px;flex-shrink:0}
+  .vlt-slot{font-family:var(--font-air);font-weight:700;font-size:30px;letter-spacing:3px;
+    color:rgba(255,255,255,.72);text-transform:uppercase}
 
   /* ── bottom scroll: same lockup as the trade-deadline ticker ── */
   #ticker{position:absolute;left:0;right:0;bottom:0;height:78px;overflow:hidden;
@@ -253,6 +278,14 @@
   .res .t{font-family:var(--font-mono);font-size:9px;color:var(--text3);margin-left:auto;
     text-transform:uppercase;letter-spacing:.08em}
 
+  .whois{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:9px 12px;margin-bottom:9px}
+  .whois-row{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:17px;
+    letter-spacing:.03em;padding:3px 0}
+  .whois .tag{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    border-radius:20px;padding:3px 9px;flex-shrink:0}
+  .whois .tag.trev{background:rgba(95,221,170,.18);color:var(--green)}
+  .whois .tag.jake{background:rgba(251,204,122,.18);color:var(--gold)}
   .judge-ctl{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
   .contested{border-color:rgba(255,107,107,.5)!important;background:rgba(255,107,107,.1)!important}
   h2{font-family:var(--font-display);font-weight:400;font-size:22px;margin:20px 0 9px;
@@ -271,6 +304,20 @@
       <div class="jm-title" id="jmTitle">ALL-JM<small id="jmSub">JULY</small></div>
     </div>
     <div class="jm-rows" id="jmRows"></div>
+  </div>
+
+  <div id="verdictLT">
+    <div class="vlt-bar">
+      <img id="vltShot" class="vlt-shot" alt="">
+      <div class="vlt-body">
+        <div class="vlt-kicker">Judge Jomboy rules</div>
+        <div class="vlt-name" id="vltName"></div>
+      </div>
+      <div class="vlt-right">
+        <div class="vlt-slot" id="vltSlot"></div>
+        <div class="jm-petals" id="vltPetals"></div>
+      </div>
+    </div>
   </div>
 
   <div id="ticker">
@@ -308,9 +355,9 @@
     <div class="eyebrow">Talkin' Baseball</div>
     <div class="titlerow">
       <h1>ALL-JM<span>.</span></h1>
-      <button id="takeBtn" class="btn-gold" type="button">▲ Take Roster</button>
-      <button id="clearBtn" class="btn-red" type="button">✕ Clear Screen</button>
+      <button id="takeBtn" class="btn-gold" type="button">▲ Show Roster</button>
       <button id="tickerBtn" type="button">▶ Ticker</button>
+      <button id="clearBtn" class="btn-red" type="button">✕ Clear All</button>
       <span class="build">Build <b id="buildStamp">—</b></span>
     </div>
   </header>
@@ -323,11 +370,17 @@
     <button id="copyOutBtn" type="button" disabled>Copy OBS URL</button>
     <button id="copyCtlBtn" type="button" disabled>Copy Control URL</button>
     <span class="hint" id="connHint"></span>
+    <span class="hint" id="seedNote"></span>
   </div>
 
   <div class="bar">
     <div><label for="monthSel">Month</label><select id="monthSel"></select></div>
     <div><label for="seasonSel">Season</label><select id="seasonSel"></select></div>
+    <div><label>&nbsp;</label><label style="display:flex;align-items:center;gap:7px;color:var(--gold);
+      text-transform:none;letter-spacing:0;font-size:11px;cursor:pointer;margin:0;padding:9px 0">
+      <input type="checkbox" id="rpToggle" style="width:15px;height:15px;accent-color:var(--gold)">
+      Include RP slot</label></div>
+    <div><label>&nbsp;</label><button id="seedBtn" type="button">Load 2026 History</button></div>
     <div><label>&nbsp;</label><button id="resetMonth" type="button">Reset This Month</button></div>
     <div><label>&nbsp;</label><button id="wipeHistory" class="btn-red" type="button">Wipe Petal History</button></div>
   </div>
@@ -341,6 +394,10 @@
       <div class="preview-stage"><iframe id="previewFrame" title="Live preview" scrolling="no"></iframe></div>
       <h2 style="margin-top:18px">Judge Jomboy</h2>
       <div class="sub">for the ones Trev &amp; Jake can't agree on</div>
+      <div class="whois" id="whoIs">
+        <div class="whois-row"><span class="tag trev">Trev</span><span id="whoTrev">—</span></div>
+        <div class="whois-row"><span class="tag jake">Jake</span><span id="whoJake">—</span></div>
+      </div>
       <div class="judge-ctl">
         <button id="judgeShow" type="button">⚖ Send to Judge</button>
         <button id="ruleA" class="btn-gold" type="button">Rule: Trev</button>
@@ -381,10 +438,24 @@ let TOPIC = params.get('topic') || '';
 const chan = 'BroadcastChannel' in window ? new BroadcastChannel('alljm') : null;
 
 // ── the roster ────────────────────────────────────────────────────────────────
-const POSITIONS = ['C','1B','2B','3B','SS','LF','CF','RF','DH','SP','RP'];
-const UTILS = ['UTIL 1','UTIL 2','UTIL 3'];          // the fan-vote spots
-const SLOT_KEYS = [...POSITIONS, ...UTILS];
-const MONTHS = ['MAR/APR','MAY','JUNE','JULY','AUGUST','SEPTEMBER'];
+// Keys are stable ids; labels are what goes on screen. Two slots both read "OF", so they can't be
+// keyed by their label. Order matches the All-JM sheet.
+const SLOT_DEFS = [
+  { k: 'C',   l: 'C'    }, { k: '1B', l: '1B' }, { k: '2B', l: '2B' },
+  { k: 'SS',  l: 'SS'   }, { k: '3B', l: '3B' },
+  { k: 'OF1', l: 'OF'   }, { k: 'CF', l: 'CF' }, { k: 'OF2', l: 'OF' },
+  { k: 'DH',  l: 'DH'   }, { k: 'SP', l: 'SP' },
+  { k: 'RP',  l: 'RP', optional: true },
+  { k: 'U1',  l: 'UTIL' }, { k: 'U2', l: 'UTIL' }, { k: 'U3', l: 'UTIL' },
+];
+const SLOT_KEYS = SLOT_DEFS.map(d => d.k);
+const UTILS = ['U1','U2','U3'];
+const labelOf = k => (SLOT_DEFS.find(d => d.k === k) || {}).l || k;
+let useRP = false;                       // off by default — some months skip it
+const activeSlots = () => SLOT_DEFS.filter(d => d.k !== 'RP' || useRP).map(d => d.k);
+// Must match the labels on the All-JM sheet exactly — a month that doesn't match is invisible to
+// the sweep check, which quietly hands out a Silver Daisy for two months out of three.
+const MONTHS = ['APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER'];
 
 const blankLeague = () => Object.fromEntries(SLOT_KEYS.map(k =>
   [k, { pid: null, name: '', team: '', locked: false, contested: false, a: null, b: null }]));
@@ -420,12 +491,86 @@ function monthsTaped() {
     return ['AL','NL'].some(lg => mm[lg] && Object.values(mm[lg]).some(v => v.locked));
   });
 }
+const keyOf = v => (v && (v.histKey || v.pid)) || null;
 const petalsFor = pid => ((store.history[pid] || {}).months || []).length;
 function hasDaisy(pid) {
   const taped = monthsTaped();
   if (taped.length < 2) return false;               // one month is not a sweep
   const won = (store.history[pid] || {}).months || [];
   return taped.every(m => won.includes(m));
+}
+
+
+// ── the 2026 board so far, off the All-JM sheet ────────────────────────────────
+// Names only. Ids are resolved against the live player index when this is loaded, so a typo shows
+// up as an unresolved row rather than a wrong headshot pointing at some other player.
+const SEED_2026 = {
+  APRIL: {
+    AL: [['C','Shea Langeliers','ATH'],['1B','Ben Rice','NYY'],['2B','Cole Young','SEA'],
+         ['SS','Kevin McGonigle','DET'],['3B','Jose Ramirez','CLE'],['OF1','Aaron Judge','NYY'],
+         ['CF','Mike Trout','LAA'],['OF2','Byron Buxton','MIN'],['DH','Yordan Alvarez','HOU'],
+         ['U1','Munetaka Murakami','CHW'],['SP','Jose Soriano','LAA']],
+    NL: [['C','Drake Baldwin','ATL'],['1B','Matt Olson','ATL'],['2B','Brice Turang','MIL'],
+         ['SS','CJ Abrams','WSH'],['3B','Max Muncy','LAD'],['OF1','Michael Harris II','ATL'],
+         ['CF','Andy Pages','LAD'],['OF2','Corbin Carroll','ARI'],['DH','Kyle Schwarber','PHI'],
+         ['U1','Ildemaro Vargas','ARI'],['SP','Shohei Ohtani','LAD']],
+  },
+  MAY: {
+    AL: [['C','Shea Langeliers','ATH'],['1B','Ben Rice','NYY'],['2B','Ezequiel Duran','TEX'],
+         ['SS','Bobby Witt Jr','KC'],['3B','Miguel Vargas','CHW'],['OF1','Aaron Judge','NYY'],
+         ['CF','Mike Trout','LAA'],['OF2','Cody Bellinger','NYY'],['DH','Yordan Alvarez','HOU'],
+         ['U1','Nick Kurtz','ATH'],['SP','Cam Schlittler','NYY']],
+    NL: [['C','Drake Baldwin','ATL'],['1B','Matt Olson','ATL'],['2B','Xavier Edwards','MIA'],
+         ['SS','Elly De La Cruz','CIN'],['3B','Max Muncy','LAD'],['OF1','Juan Soto','NYM'],
+         ['CF','Andy Pages','LAD'],['OF2','James Wood','WSH'],['DH','Kyle Schwarber','PHI'],
+         ['U1','Shohei Ohtani','LAD'],['SP','Jacob Misiorowski','MIL']],
+  },
+  JUNE: {
+    AL: [['C','Dillon Dingler','DET'],['1B','Nick Kurtz','ATH'],['2B','Ezequiel Duran','TEX'],
+         ['SS','Bobby Witt Jr','KC'],['3B','Miguel Vargas','CHW'],['OF1','Mike Trout','LAA'],
+         ['CF','Byron Buxton','MIN'],['OF2','Cody Bellinger','NYY'],['DH','Yordan Alvarez','HOU'],
+         ['U1','Junior Caminero','TB'],['SP','Cam Schlittler','NYY']],
+    NL: [['C','Hunter Goodman','COL'],['1B','Matt Olson','ATL'],['2B','JJ Wetherholt','STL'],
+         ['SS','Otto Lopez','MIA'],['3B','Max Muncy','LAD'],['OF1','Corbin Carroll','ARI'],
+         ['CF','Pete Crow-Armstrong','CHC'],['OF2','James Wood','WSH'],['DH','Shohei Ohtani','LAD'],
+         ['U1','Kyle Schwarber','PHI'],['SP','Cristopher Sanchez','PHI']],
+  },
+};
+
+// Accents and punctuation differ between the sheet and the API ("Sanchez" vs "Sánchez",
+// "Bobby Witt Jr" vs "Bobby Witt Jr."), so match on a folded form rather than exact text.
+const fold = x => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z ]/g, '').trim();
+
+function loadSeed() {
+  if (!allPlayers.length) { alert('Player list still loading — try again in a second.'); return; }
+  const misses = [];
+  Object.entries(SEED_2026).forEach(([month, lgs]) => {
+    Object.entries(lgs).forEach(([lg, rows]) => {
+      store.rosters['2026'] = store.rosters['2026'] || {};
+      store.rosters['2026'][month] = store.rosters['2026'][month] || {};
+      const S = store.rosters['2026'][month][lg] = blankLeague();
+      rows.forEach(([key, name, team]) => {
+        const f = fold(name);
+        const hit = allPlayers.find(p => fold(p.name) === f)
+                 || allPlayers.find(p => fold(p.name).startsWith(f))
+                 || allPlayers.find(p => f.startsWith(fold(p.name)));
+        if (!hit) { misses.push(`${month} ${lg} ${labelOf(key)}: ${name}`); }
+        S[key].pid = hit ? hit.id : null;
+        S[key].name = name;
+        S[key].team = team;
+        S[key].locked = true;
+        const pid = hit ? hit.id : 'n:' + f;      // unresolved names still earn their petals
+        const h = store.history[pid] = store.history[pid] || { name, team, months: [] };
+        if (!h.months.includes(month)) h.months.push(month);
+        S[key].histKey = pid;
+      });
+    });
+  });
+  save(); renderSlots();
+  $('seedNote').textContent = misses.length
+    ? `Loaded. ${misses.length} name(s) didn't match a current player: ${misses.slice(0, 4).join(' · ')}`
+    : 'Loaded April, May and June for both leagues.';
 }
 
 // ── player search ─────────────────────────────────────────────────────────────
@@ -468,12 +613,12 @@ function renderSlots() {
   const box = $('slotList'); box.innerHTML = '';
   const S = slots(league);
   let locked = 0;
-  SLOT_KEYS.forEach(key => {
+  activeSlots().forEach(key => {
     const v = S[key];
     if (v.locked) locked++;
     const row = el('div', 'slot' + (UTILS.includes(key) ? ' util' : '') +
       (v.locked ? ' locked' : '') + (v.contested ? ' contested' : ''));
-    row.appendChild(el('div', 'pos', key));
+    row.appendChild(el('div', 'pos', labelOf(key)));
 
     if (v.pid) {
       const img = el('img', 'shot'); img.src = headshot(v.pid); img.onerror = () => img.remove();
@@ -482,7 +627,7 @@ function renderSlots() {
       who.appendChild(el('div', 'nm', v.name));
       who.appendChild(el('div', 'tm', v.team));
       row.appendChild(who);
-      row.appendChild(petalStrip(v.pid));
+      row.appendChild(petalStrip(keyOf(v)));
     } else {
       const pop = el('div', 'search-pop');
       const inp = el('input'); inp.type = 'search'; inp.placeholder = `Search ${key}…`;
@@ -546,7 +691,7 @@ function renderSlots() {
     row.appendChild(acts);
     box.appendChild(row);
   });
-  $('lockCount').textContent = `${locked} of ${SLOT_KEYS.length} locked`;
+  $('lockCount').textContent = `${locked} of ${activeSlots().length} locked`;
 }
 
 // Locking is what awards a petal, and unlocking takes it back — otherwise a mis-click quietly
@@ -556,7 +701,8 @@ function toggleLock(key) {
   if (!v.pid) return;
   v.locked = !v.locked;
   if (v.locked) {
-    const h = store.history[v.pid] = store.history[v.pid] || { name: v.name, team: v.team, months: [] };
+    const hk = keyOf(v);
+    const h = store.history[hk] = store.history[hk] || { name: v.name, team: v.team, months: [] };
     h.name = v.name; h.team = v.team;
     if (!h.months.includes(store.month)) h.months.push(store.month);
     announce(v);
@@ -568,7 +714,7 @@ function toggleLock(key) {
 function unlock(key) {
   const v = slots(league)[key];
   if (!v.pid || !v.locked) return;
-  const h = store.history[v.pid];
+  const h = store.history[keyOf(v)];
   if (h) h.months = h.months.filter(m => m !== store.month);
   v.locked = false;
 }
@@ -579,15 +725,16 @@ let air = { graphic: 'off', league: 'AL', month: '', rows: [], ticker: [], ticke
 
 function rowsFor(lg) {
   const S = slots(lg);
-  return SLOT_KEYS.filter(k => S[k].locked && S[k].pid).map(k => ({
-    pos: k, pid: S[k].pid, name: S[k].name, team: S[k].team,
-    petals: petalsFor(S[k].pid), daisy: hasDaisy(S[k].pid),
+  // a seeded name that didn't resolve to an id still belongs on the board — it just has no headshot
+  return activeSlots().filter(k => S[k].locked && (S[k].pid || S[k].name)).map(k => ({
+    pos: labelOf(k), pid: S[k].pid, name: S[k].name, team: S[k].team,
+    petals: petalsFor(keyOf(S[k])), daisy: hasDaisy(keyOf(S[k])),
   }));
 }
 function announce(v) {
-  air.ticker = [...(air.ticker || []).filter(t => t.pid !== v.pid), {
+  air.ticker = [...(air.ticker || []).filter(t => t.name !== v.name), {
     pid: v.pid, name: v.name, team: v.team, month: store.month,
-    petals: petalsFor(v.pid), daisy: hasDaisy(v.pid),
+    petals: petalsFor(keyOf(v)), daisy: hasDaisy(keyOf(v)),
   }].slice(-12);
 }
 function publish() {
@@ -624,13 +771,14 @@ function petalNodes(petals, daisy) {
 
 function paintRoster(s) {
   $('jmLogo').src = s.league === 'NL' ? NL_LOGO : AL_LOGO;
-  $('jmTitle').childNodes[0].nodeValue = 'ALL-JM ';
-  $('jmSub').textContent = `${s.league} · ${s.month}`;
+  const monthOnly = (s.month || '').split(' ')[0];
+  $('jmTitle').childNodes[0].nodeValue = `${monthOnly} ALL-JM TEAM `;
+  $('jmSub').textContent = s.league === 'NL' ? 'NATIONAL LEAGUE' : 'AMERICAN LEAGUE';
   const box = $('jmRows'); box.innerHTML = '';
   const rows = s.rows || [];
   // 14 slots would overflow 1004px, so the panel fits what it can and the rest cycle in the ticker
   rows.slice(0, 14).forEach((r, i) => {
-    const row = el('div', 'jm-row' + (r.pos.startsWith('UTIL') ? ' jm-util' : ''));
+    const row = el('div', 'jm-row' + (r.pos === 'UTIL' ? ' jm-util' : ''));
     row.style.animationDelay = (0.55 + i * 0.05) + 's';
     row.appendChild(el('div', 'jm-pos', r.pos));
     const im = el('img', 'jm-shot'); im.src = headshot(r.pid); im.onerror = () => im.remove();
@@ -695,6 +843,20 @@ function paintJudge(j) {
   box.classList.add('visible');
 }
 
+function paintVerdict(j) {
+  const box = $('verdictLT');
+  if (!j || !j.verdict) { box.classList.remove('visible'); return; }
+  const won = j.verdict === 'a' ? j.a : j.b;
+  if (!won) { box.classList.remove('visible'); return; }
+  const im = $('vltShot');
+  if (won.pid) { im.src = headshot(won.pid); im.style.visibility = 'visible'; } else im.style.visibility = 'hidden';
+  $('vltName').textContent = (won.name || '').toUpperCase();
+  $('vltSlot').textContent = `${j.league} · ${j.pos}${won.team ? ' · ' + won.team : ''}`;
+  const p = $('vltPetals'); p.innerHTML = '';
+  p.appendChild(petalNodes(won.petals || 0, !!won.daisy));
+  box.classList.add('visible');
+}
+
 function applyAir(s) {
   if (!s || (s.seq != null && s.seq <= lastSeq)) return;   // ignore a late or duplicated message
   lastSeq = s.seq != null ? s.seq : lastSeq;
@@ -709,7 +871,9 @@ function applyAir(s) {
     shellShown = false;
   }
   paintTicker(s);
+  // the versus card is the argument; the lower third is the ruling
   paintJudge(s.graphic === 'judge' ? s.judge : null);
+  paintVerdict(s.graphic === 'verdict' ? s.judge : null);
 }
 
 // ── wiring ────────────────────────────────────────────────────────────────────
@@ -748,31 +912,48 @@ function loadPreview(force) {
   f.src = base + '&_=' + Date.now();
 }
 
+function updateWhoIs() {
+  const key = judgeSlotKey || activeSlots().find(k => slots(league)[k].contested);
+  const v = key ? slots(league)[key] : null;
+  const a = v && (v.a || (v.pid ? { name: v.name, team: v.team } : null));
+  const b = v && v.b;
+  $('whoTrev').textContent = a ? `${a.name}${a.team ? ' · ' + a.team : ''}` : '—';
+  $('whoJake').textContent = b ? `${b.name}${b.team ? ' · ' + b.team : ''}` : '—';
+}
+
 function updateJudgeNote() {
   const S = slots(league);
-  const c = SLOT_KEYS.filter(k => S[k].contested);
+  const c = activeSlots().filter(k => S[k].contested).map(labelOf);
   $('judgeNote').textContent = c.length
-    ? `Contested: ${c.join(', ')} — showing ${judgeSlotKey || c[0]}`
+    ? `Contested: ${c.join(', ')} — showing ${labelOf(judgeSlotKey) || c[0]}`
     : 'Mark a slot contested to load it here.';
+  updateWhoIs();
 }
 
 // Judge Jomboy takes the contested slot's two candidates. Trev's pick is whoever is in the slot;
 // Jake's is the previous occupant if there was one, otherwise set it by searching again.
 function judgePayload(verdict) {
-  const key = judgeSlotKey || SLOT_KEYS.find(k => slots(league)[k].contested);
+  const key = judgeSlotKey || activeSlots().find(k => slots(league)[k].contested);
   if (!key) return null;
   const v = slots(league)[key];
   if (!v.a && v.pid) v.a = { pid: v.pid, name: v.name, team: v.team };   // freeze Trev's before a ruling replaces it
   return {
-    league, pos: key,
+    league, pos: labelOf(key),
     a: v.a || (v.pid ? { pid: v.pid, name: v.name, team: v.team } : null),
     b: v.b || null,
     verdict: verdict || null,
   };
 }
 
-$('takeBtn').onclick = () => { air.graphic = 'roster'; publish(); };
-$('clearBtn').onclick = () => { air.graphic = 'off'; air.tickerOn = false; air.judge = null; publish(); };
+function setTakeBtn() {
+  const on = air.graphic === 'roster';
+  $('takeBtn').textContent = on ? '▼ Hide Roster' : '▲ Show Roster';
+  $('takeBtn').classList.toggle('btn-gold', !on);
+}
+$('takeBtn').onclick = () => { air.graphic = air.graphic === 'roster' ? 'off' : 'roster'; publish(); setTakeBtn(); };
+$('clearBtn').onclick = () => { air.graphic = 'off'; air.tickerOn = false; air.judge = null; publish(); setTakeBtn(); };
+$('rpToggle').onchange = () => { useRP = $('rpToggle').checked; renderSlots(); if (air.graphic === 'roster') publish(); };
+$('seedBtn').onclick = loadSeed;
 $('tickerBtn').onclick = () => { air.tickerOn = !air.tickerOn; publish(); };
 $('judgeShow').onclick = () => {
   const j = judgePayload(null);
@@ -780,12 +961,13 @@ $('judgeShow').onclick = () => {
   air.graphic = 'judge'; air.judge = j; publish();
 };
 function rule(side) {
-  const key = judgeSlotKey || SLOT_KEYS.find(k => slots(league)[k].contested);
+  const key = judgeSlotKey || activeSlots().find(k => slots(league)[k].contested);
   if (!key) return;
   const j = judgePayload(side);
   if (!j) return;
   const won = side === 'a' ? j.a : j.b;
-  air.graphic = 'judge'; air.judge = j; publish();
+  if (won) { won.petals = petalsFor(won.pid) + 1; won.daisy = false; }   // the petal they're about to earn
+  air.graphic = 'verdict'; air.judge = j; publish();
   if (!won || !won.pid) return;
   // the ruling is the decision — put them in the slot and award the petal
   const v = slots(league)[key];
@@ -795,7 +977,7 @@ function rule(side) {
   v.contested = false;
   v.locked = false;
   toggleLock(key);
-  renderSlots(); updateJudgeNote();
+  renderSlots(); updateJudgeNote(); setTakeBtn();
 }
 $('ruleA').onclick = () => rule('a');
 $('ruleB').onclick = () => rule('b');
@@ -817,7 +999,7 @@ $('resetMonth').onclick = () => {
   if (!confirm(`Clear every pick for ${store.month} ${store.season}? Petals already awarded this month are given back.`)) return;
   ['AL','NL'].forEach(lg => {
     const S = slots(lg);
-    SLOT_KEYS.forEach(k => { if (S[k].locked) { const h = store.history[S[k].pid]; if (h) h.months = h.months.filter(m => m !== store.month); } });
+    SLOT_KEYS.forEach(k => { if (S[k].locked) { const h = store.history[keyOf(S[k])]; if (h) h.months = h.months.filter(m => m !== store.month); } });
     store.rosters[store.season][store.month][lg] = blankLeague();
   });
   save(); renderSlots(); publish();
@@ -876,7 +1058,7 @@ if (isOutput) {
   $('topicInput').value = start || `alljm-${Math.random().toString(36).slice(2, 8)}`;
   if (start) { TOPIC = start; try { localStorage.setItem(TOPIC_KEY, TOPIC); } catch {} }
   setConn(false);
-  renderSlots(); updateJudgeNote(); loadPreview(true);
+  renderSlots(); updateJudgeNote(); loadPreview(true); setTakeBtn();
   loadPlayers().then(renderSlots);
   if (TOPIC) publish();
 }

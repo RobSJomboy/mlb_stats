@@ -316,8 +316,13 @@ The on-air panel is deliberately the **same geometry as MLB_Standings** — 1920
 528×1004 pinned right at `top:38px`, Rift, gold `#c8a84b`, same slide-in — so it drops into that
 Browser Source without re-aligning anything.
 
-- **14 slots per league**: C, 1B, 2B, 3B, SS, LF, CF, RF, DH, SP, RP, plus three UTIL spots for the
-  fan vote. Search fills a slot; **Lock In** puts it on the board.
+- **Slots follow the All-JM sheet**: C, 1B, 2B, SS, 3B, OF, CF, OF, DH, SP, then the three UTIL
+  spots for the fan vote. **RP is a toggle**, off by default, for the months you run one. Search
+  fills a slot; **Lock In** puts it on the board.
+- **April, May and June 2026 are pre-loaded** — hit **Load 2026 History** once and the board and the
+  petals are seeded off the sheet. Names are resolved against the live player index rather than
+  hardcoded ids, so a mismatch shows up as an unresolved row instead of the wrong face.
+- **The month dropdown is the archive.** Pick April and take it and April's team goes up.
 - **Petals.** Locking a player in for a month awards a silver petal. Unlocking takes it back —
   otherwise a mis-click quietly inflates someone's flower for the rest of the season. Win *every*
   month taped so far and the petals become **The Silver Daisy**, a full flower with a gold centre.
@@ -325,9 +330,11 @@ Browser Source without re-aligning anything.
 - **Bottom scroll** announcing each lock-in with headshot, club, month and petals, in the same
   lockup as the trade-deadline ticker. Toggle with **▶ Ticker**.
 - **Judge Jomboy** for the ones Trev and Jake can't agree on: mark a slot contested, the slot's
-  player becomes Trev's pick, search Jake's alongside it, then **⚖ Send to Judge**. The card shows
-  both. **Rule: Trev / Rule: Jake** greys out the loser, lights the winner gold, bangs the gavel —
-  and puts the winner in the slot, locked, petal awarded. The ruling *is* the decision.
+  player becomes Trev's pick, search Jake's alongside it, then **⚖ Send to Judge**. A who-is-who
+  panel in the control spells out which name is whose so nobody rules for the wrong side. The
+  full-screen card is the argument; **Rule: Trev / Rule: Jake** then cuts to a **lower third**
+  announcing the winner, and puts them in the slot, locked, petal awarded. The ruling *is* the
+  decision.
 - Everything on the wire is absolute state with a sequence number, same as the standings build, so
   a duplicated or late message can't leave the screen disagreeing with the control page.
 
