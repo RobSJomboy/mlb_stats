@@ -430,6 +430,10 @@
     <span class="conn-pill" id="connStatus">not connected</span>
     <button id="copyDisplayBtn" type="button" disabled>Copy Display URL</button>
     <button id="copyControlBtn" type="button" disabled title="A control link with the topic baked in — opens connected on any computer">Copy Control URL</button>
+    <span class="k" style="margin-left:6px">Relay</span>
+    <input type="text" id="hubInput" placeholder="https://…workers.dev (optional)" spellcheck="false"
+      style="min-width:250px;font-family:var(--font-mono);font-size:12px">
+    <button id="hubSave" type="button">Use Relay</button>
     <span class="hint" id="connHint"></span>
   </div>
   <div class="obsurl" id="obsUrl" hidden>
@@ -597,6 +601,19 @@ const BUILD = (document.lastModified || '').replace(/\D/g, '').slice(0, 14);
 // Receiving the same payload three times is free: renderOnAirBar already drops anything whose
 // content matches what's on screen, which was built for SSE-plus-poll duplicates and covers this
 // exactly. ?ntfy=https://host pins a single host if you ever need to.
+// Your own Cloudflare relay, when one is configured. It's the primary path — the public ntfy
+// instances kept going down mid-show, and a graphic that can't reach air is worse than any amount
+// of extra setup. ntfy stays wired as an automatic fallback so nothing gets worse if the relay is
+// unset or unreachable.
+const RELAY_KEY_STORE = 'tb-relay-url';
+function initialRelay() {
+  const p = params.get('relay2') || params.get('hub') || '';
+  if (p) return p.replace(/\/$/, '');
+  try { return (localStorage.getItem(RELAY_KEY_STORE) || '').replace(/\/$/, ''); } catch { return ''; }
+}
+let HUB = initialRelay();
+const hubURL = room => `${HUB}/r/${encodeURIComponent(room)}`;
+
 const NTFY_HOSTS = (params.get('ntfy') ? [params.get('ntfy').replace(/\/$/, '')] : [
   'https://ntfy.sh',
   'https://ntfy.envs.net',
@@ -1250,6 +1267,18 @@ function relayPost(payload) {
 function publishTopic(payload) {
   if (!TOPIC) return;
   const body = JSON.stringify(payload || { clear: true, ts: Date.now() });
+  if (HUB) {
+    // Don't mark the connection dead when the relay fails — the fallback may well carry it, and a
+    // red pill while you are actually on air is a false alarm that costs more than it saves.
+    fetch(hubURL(TOPIC), { method: 'POST', body })
+      .then(r => { if (r.ok) setConn(true, 'relay'); else ntfyPublish(body); })
+      .catch(() => ntfyPublish(body));
+    return;
+  }
+  ntfyPublish(body);
+}
+
+function ntfyPublish(body) {
   // Green if ANY host took it — one mirror is all it takes to reach OBS.
   let anyOk = false, settled = 0;
   NTFY_HOSTS.forEach(host => {
@@ -1273,12 +1302,14 @@ function refreshObsPanel() {
   loadPreview();
 }
 
-function setConn(ok) {
+function setConn(ok, via) {
   const pill = $('connStatus'); if (!pill) return;
   topicOk = !!ok && !!TOPIC;
   refreshObsPanel();
   pill.classList.toggle('ok', !!ok);
-  pill.textContent = ok ? 'connected' : (TOPIC ? 'not reaching topic' : 'not connected');
+  // naming the path that carried it makes a silent failover visible rather than a mystery
+  pill.textContent = ok ? (via ? `connected · ${via}` : 'connected')
+                        : (TOPIC ? 'not reaching topic' : 'not connected');
   $('copyDisplayBtn').disabled = !TOPIC;
   $('copyControlBtn').disabled = !TOPIC;
   // A red pill on its own is easy to miss, and the consequence isn't obvious: OBS goes stale while
@@ -1686,6 +1717,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function initTopicDisplay() {
+  if (HUB) return initHubDisplay();
   const apply = envelope => {
     if (!envelope || !envelope.message) return;
     try { renderOnAirBar(JSON.parse(envelope.message)); } catch { /* malformed payload */ }
@@ -1729,6 +1761,34 @@ function initTopicDisplay() {
     // just refreshed would sit blank until the next click.
     pollOnce('10m');
   });
+}
+
+// WebSocket to your relay, with a slow poll behind it in case a network eats the upgrade.
+function initHubDisplay() {
+  let ws = null, lastAt = Date.now();
+  const open = () => {
+    try {
+      ws = new WebSocket(hubURL(TOPIC).replace(/^http/, 'ws'));
+      ws.onmessage = ev => { lastAt = Date.now(); try { renderOnAirBar(JSON.parse(ev.data)); } catch {} };
+      ws.onopen = () => { lastAt = Date.now(); };
+      ws.onclose = () => {};
+      ws.onerror = () => {};
+    } catch {}
+  };
+  open();
+  // reconnect if the socket dies or goes quiet in a way the browser hasn't reported
+  setInterval(() => {
+    if (!ws || ws.readyState > 1 || Date.now() - lastAt > 45000) { try { ws && ws.close(); } catch {} open(); lastAt = Date.now(); }
+  }, 5000);
+  const poll = async () => {
+    try {
+      const r = await fetch(hubURL(TOPIC) + '?t=' + Date.now(), { cache: 'no-store' });
+      const t = await r.text();
+      if (t && t !== 'null') { lastAt = Date.now(); renderOnAirBar(JSON.parse(t)); }
+    } catch {}
+  };
+  poll();
+  setInterval(poll, 15000);
 }
 
 function initDisplay() {
@@ -2100,9 +2160,10 @@ $('openDisplay').onclick = () => {
 // The display URL has to be openable from the OBS machine, which rules out file:// — that path
 // only exists on this laptop. Say so up front rather than letting him paste a dead link into OBS.
 const servedFromHost = /^https?:$/.test(location.protocol);
+const relayParam = () => (HUB ? `&relay2=${encodeURIComponent(HUB)}` : '');
 function displayURL() {
   return `${location.href.split(/[?#]/)[0]}?display=1&topic=${encodeURIComponent(TOPIC)}`
-    + (BUILD ? `&v=${BUILD}` : '');
+    + relayParam() + (BUILD ? `&v=${BUILD}` : '');
 }
 
 function connectTopic() {
@@ -2131,12 +2192,28 @@ function updateConnHint() {
   hint.className = 'hint';
 }
 
+// Setting a relay makes it the primary path immediately; clearing the box goes back to ntfy.
+$('hubSave').onclick = () => {
+  HUB = ($('hubInput').value || '').trim().replace(/\/$/, '');
+  try { HUB ? localStorage.setItem(RELAY_KEY_STORE, HUB) : localStorage.removeItem(RELAY_KEY_STORE); } catch {}
+  const hint = $('connHint');
+  if (!HUB) { hint.textContent = 'Relay cleared — back to the public ntfy hosts.'; hint.className = 'hint'; loadPreview(true); return; }
+  fetch(HUB + '/', { cache: 'no-store' }).then(r => r.json()).then(j => {
+    hint.textContent = j && j.service === 'jomboy-relay'
+      ? 'Relay reachable. It rides along in the copied links, so the other machine picks it up.'
+      : "That URL answered, but it isn't the relay — check you pasted the workers.dev root.";
+    hint.className = j && j.service === 'jomboy-relay' ? 'hint' : 'hint warn';
+  }).catch(() => { hint.textContent = "Can't reach that relay URL."; hint.className = 'hint warn'; });
+  if (TOPIC) publishTopic(null);
+  loadPreview(true);
+};
+
 $('connectBtn').onclick = connectTopic;
 $('topicInput').onkeydown = e => { if (e.key === 'Enter') connectTopic(); };
 // A control link carrying the topic, so opening it on another machine comes up already connected
 // instead of inventing a new topic and silently leaving OBS dark.
 function controlURL() {
-  return `${location.href.split(/[?#]/)[0]}?topic=${encodeURIComponent(TOPIC)}`;
+  return `${location.href.split(/[?#]/)[0]}?topic=${encodeURIComponent(TOPIC)}` + relayParam();
 }
 $('copyControlBtn').onclick = () => {
   const btn = $('copyControlBtn'), url = controlURL();
@@ -2230,6 +2307,7 @@ const yr = new Date().getFullYear();
 if (isDisplayMode) {
   initDisplay();
 } else {
+  $('hubInput').value = HUB;
   const stamp = $('buildStamp');
   if (stamp) stamp.textContent = document.lastModified || 'unknown';
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');

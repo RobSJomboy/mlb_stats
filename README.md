@@ -163,6 +163,28 @@ host if you need to.
 — a guessable topic is a stranger's write access to your lower third. Don't shorten it to something
 tidy like `talkinbaseball`.
 
+### Option B2 — your own relay (recommended)
+
+The public ntfy hosts kept going down mid-show. `relay/` is a ~90-line Cloudflare Worker that does
+the same job on your own account: free plan, no card, permanent URL. Deploy once:
+
+```bash
+cd relay
+npx wrangler login
+npx wrangler deploy
+```
+
+Paste the printed `https://…workers.dev` URL into the **Relay** box on the control page and hit
+**Use Relay**. It's remembered, and it rides along in Copy Control URL / Copy OBS URL, so the other
+machine picks it up from the link with nothing to configure.
+
+The display holds a **WebSocket** to it, so pushes are instant rather than polled, and a Browser
+Source that OBS just refreshed is caught up the moment it connects — the room keeps the last state.
+
+**ntfy stays wired as an automatic fallback.** If the relay is unset or unreachable, publishing
+falls back to the public hosts without you doing anything; the Connection pill names whichever path
+carried it (`connected · relay` / `connected · ntfy`). See `relay/DEPLOY.md`.
+
 ### Option C — Local relay (no internet)
 
 Only worth it if you can't rely on the internet, since the app needs it for stats anyway. Runs on
