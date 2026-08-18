@@ -79,6 +79,23 @@ cycle isn't nine posts a minute at ntfy, and the pacing stays smooth regardless 
 the lower third without first digging back into whichever player or team is up. The card set stays
 loaded, so clicking back to LIVE puts the same graphic straight back on screen.
 
+**On pace** — an **ON PACE** pill on the player card projects the counting stats over a full 162.
+
+The maths is the standard broadcast pace: a counting stat scaled by `162 / the club's games played`.
+Scaling by the **club's** games rather than the player's is deliberate — it carries missed time
+forward instead of pretending a player who has been hurt suddenly plays every remaining game. Judge
+at 17 HR in 59 games with the Yankees on 124 comes out at 22 HR and **77 games**, which is the
+honest read of a season interrupted by the IL.
+
+Only counting stats are scaled. AVG/OBP/SLG/OPS and ERA/WHIP are rates and are shown unchanged and
+labelled as such — projecting them forward would just restate today's number while implying it was
+a forecast. Innings round to real thirds, so 46.1 IP paces to 60.2, not 60.33.
+
+**This is not FanGraphs' projection.** Their on-pace numbers aren't fetchable — the site sits behind
+a bot challenge and would be blocked by CORS from a browser regardless — so this is computed here
+from the same StatsAPI line as everything else, and labelled as a pace rather than as anyone's
+projection system.
+
 **Custom date range** — **Stats from / to** in the header. Leave the end blank for "from this date
 until now". It applies to whatever you're looking at: players get a **Custom Range** pill, and team
 stats are recomputed — ranks included — over that window.

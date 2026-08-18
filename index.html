@@ -920,6 +920,7 @@ function paintSearch() {
 
 const TF = [
   ['season', 'FULL SEASON'],
+  ['pace', 'ON PACE'],
   ['7', 'LAST 7 DAYS'],
   ['14', 'LAST 14 DAYS'],
   ['30', 'LAST 30 DAYS'],
@@ -927,6 +928,49 @@ const TF = [
   ['vr', 'VS RIGHTIES'],
 ];
 const isSplitTf = tf => tf === 'vl' || tf === 'vr';
+const isPace = tf => tf === 'pace';
+
+// ── on-pace projection ────────────────────────────────────────────────────────────────────────
+// FanGraphs' own on-pace numbers aren't fetchable — the site sits behind a bot challenge and would
+// be blocked by CORS from a browser regardless — so this is computed here from the same StatsAPI
+// season line the rest of the app uses, and labelled as a pace rather than as anyone's projection
+// system.
+//
+// The maths is the standard broadcast pace: a counting stat scaled by 162 / the club's games
+// played. Scaling by the CLUB's games rather than the player's is deliberate — it carries missed
+// time forward instead of assuming a player who has been hurt suddenly plays every remaining game.
+const SEASON_GAMES = 162;
+let teamGamesCache = null;
+async function teamGamesPlayed(teamId, year) {
+  if (!teamGamesCache) {
+    teamGamesCache = (async () => {
+      const map = new Map();
+      try {
+        const d = await jc(`${API}/standings?leagueId=103,104&season=${year}&standingsTypes=regularSeason`);
+        (d.records || []).forEach(rec => (rec.teamRecords || []).forEach(tr => {
+          if (tr.team) map.set(tr.team.id, (+tr.wins || 0) + (+tr.losses || 0));
+        }));
+      } catch {}
+      return map;
+    })();
+  }
+  const m = await teamGamesCache;
+  return m.get(+teamId) || 0;
+}
+
+const paceInt = (v, mult) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? Math.round(n * mult) : null;
+};
+// innings carry thirds, so they round to a third rather than to a whole inning
+const paceIP = (ip, mult) => {
+  const s = String(ip == null ? '' : ip);
+  const m = s.match(/^(\d+)(?:\.(\d))?$/);
+  if (!m) return null;
+  const outs = (+m[1]) * 3 + (+(m[2] || 0));
+  const t = Math.round(outs * mult);
+  return `${Math.floor(t / 3)}.${t % 3}`;
+};
 // The pill list gains a custom-range entry while a range is set. vs-L/R stay season-long and get
 // relabelled to say so — the API silently ignores sitCodes on a date range and hands back the
 // undifferentiated line, so a "VS LHP" pill over a window would be quietly wrong.
@@ -975,12 +1019,41 @@ async function annotateEmpty(pid, group, tf, year) {
     : `No ${group} games this season.`;
 }
 
+// Only counting stats get scaled. AVG/OBP/SLG/OPS/ERA/WHIP are rates — projecting them forward
+// would just restate today's number while implying it was a forecast.
+function paceBatting(st) {
+  const m = st.__mult;
+  return {
+    label: `ON PACE \u00b7 ${SEASON_GAMES} G`,
+    hitLine: `${paceInt(st.gamesPlayed, m)} G PROJ \u00b7 ${st.avg}/${st.obp}/${st.slg} HELD`,
+    cells: [['HR', paceInt(st.homeRuns, m)], ['RBI', paceInt(st.rbi, m)], ['R', paceInt(st.runs, m)],
+            ['H', paceInt(st.hits, m)], ['SB', paceInt(st.stolenBases, m)],
+            ['BB', paceInt(st.baseOnBalls, m)], ['K', paceInt(st.strikeOuts, m)]],
+  };
+}
+function pacePitching(st) {
+  const m = st.__mult;
+  return {
+    label: `ON PACE \u00b7 ${SEASON_GAMES} G`,
+    hitLine: `${st.era} ERA \u00b7 ${st.whip} WHIP HELD`,
+    cells: [['IP', paceIP(st.inningsPitched, m)], ['K', paceInt(st.strikeOuts, m)],
+            ['W', paceInt(st.wins, m)], ['L', paceInt(st.losses, m)],
+            ['SV', paceInt(st.saves, m)], ['BB', paceInt(st.baseOnBalls, m)]],
+  };
+}
+
 function statGrid(pairs) {
   return `<div class="stat-grid">` + pairs.map(([k, v]) =>
     `<div class="cell"><div class="v">${v != null && v !== '' ? v : '–'}</div><div class="k">${k}</div></div>`).join('') + `</div>`;
 }
 function apiBattingBlock(st) {
   if (!st) return emptyBlock('hitting');
+  if (st.__pace) {
+    const d = paceBatting(st);
+    return `<div class="modal-hitline">${d.hitLine}</div>`
+      + `<div class="modal-line">${st.avg} / ${st.obp} / ${st.slg} / ${st.ops} <span style="color:var(--text3)">RATES UNCHANGED</span></div>`
+      + statGrid(d.cells.map(([k, v]) => [k, v == null ? '\u2013' : v]));
+  }
   const cells = [['HR', st.homeRuns], ['RBI', st.rbi], ['BB', st.baseOnBalls],
                  ['K', st.strikeOuts], ['SB', st.stolenBases], ['HBP', st.hitByPitch],
                  ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
@@ -990,6 +1063,11 @@ function apiBattingBlock(st) {
 }
 function apiPitchingBlock(st) {
   if (!st) return emptyBlock('pitching');
+  if (st.__pace) {
+    const d = pacePitching(st);
+    return `<div class="modal-line">${st.era} ERA \u00b7 ${st.whip} WHIP <span style="color:var(--text3)">RATES UNCHANGED</span></div>`
+      + statGrid(d.cells.map(([k, v]) => [k, v == null ? '\u2013' : v]));
+  }
   return `<div class="modal-line">${st.inningsPitched} IP · ${st.era} ERA · ${st.wins}-${st.losses}</div>`
     + statGrid([['WHIP', st.whip], ['K', st.strikeOuts], ['BB', st.baseOnBalls],
                 ['SV', st.saves], ['ER', st.earnedRuns], ['K%', kPct(st.strikeOuts, st.battersFaced)]]);
@@ -1029,6 +1107,7 @@ function dateRangeForDays(n) {
 // group is 'hitting' | 'pitching' | omitted — the vs-L/R label reads differently depending on
 // which side of the ball it's describing (a hitter faces LHP, a pitcher faces LHB)
 function tfLabel(tf, year, group) {
+  if (tf === 'pace') return `ON PACE \u00b7 ${SEASON_GAMES} G`;
   if (tf === 'range') return rangeLabel();
   if (tf === 'season') return `${year} SEASON`;
   if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
@@ -1037,6 +1116,15 @@ function tfLabel(tf, year, group) {
 }
 
 async function fetchStat(pid, group, tf, year) {
+  if (isPace(tf)) {
+    const st = await fetchStat(pid, group, 'season', year);
+    if (!st) return null;
+    const row = modalRow && String(modalRow.id) === String(pid) ? modalRow : null;
+    const gp = row && row.teamId ? await teamGamesPlayed(row.teamId, year) : 0;
+    if (!gp) return null;                       // no denominator, no honest projection
+    const mult = SEASON_GAMES / gp;
+    return { ...st, __pace: true, __mult: mult, __teamGP: gp };
+  }
   let url;
   if (tf === 'season') {
     url = `${API}/people/${pid}/stats?stats=season&season=${year}&group=${group}`;
@@ -1117,12 +1205,14 @@ function closeModal() { $('modalBackdrop').hidden = true; }
 
 function battingGraphicData(st, label) {
   if (!st) return null;
+  if (st.__pace) return paceBatting(st);
   const cells = [['AVG', st.avg], ['OBP', st.obp], ['SLG', st.slg], ['OPS', st.ops], ['HR', st.homeRuns], ['RBI', st.rbi],
                  ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
   return { label, hitLine: `${st.hits}-for-${st.atBats}`, cells };
 }
 function pitchingGraphicData(st, label) {
   if (!st) return null;
+  if (st.__pace) return pacePitching(st);
   return { label, hitLine: `${st.gamesPlayed || 0} G${st.gamesStarted ? ' · ' + st.gamesStarted + ' GS' : ''}`, cells: [
     ['ERA', st.era], ['WHIP', st.whip], ['IP', st.inningsPitched], ['K', st.strikeOuts], ['BB', st.baseOnBalls],
     ['W-L', `${st.wins}-${st.losses}`], ['K%', kPct(st.strikeOuts, st.battersFaced)] ] };
