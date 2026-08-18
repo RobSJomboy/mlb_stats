@@ -79,22 +79,30 @@ cycle isn't nine posts a minute at ntfy, and the pacing stays smooth regardless 
 the lower third without first digging back into whichever player or team is up. The card set stays
 loaded, so clicking back to LIVE puts the same graphic straight back on screen.
 
-**On pace** — an **ON PACE** pill on the player card projects the counting stats over a full 162.
+**On pace** — two pills on the player card, because "on pace" means two different things once a
+player has missed time.
 
-The maths is the standard broadcast pace: a counting stat scaled by `162 / the club's games played`.
-Scaling by the **club's** games rather than the player's is deliberate — it carries missed time
-forward instead of pretending a player who has been hurt suddenly plays every remaining game. Judge
-at 17 HR in 59 games with the Yankees on 124 comes out at 22 HR and **77 games**, which is the
-honest read of a season interrupted by the IL.
+| Pill | Assumption | Judge at 17 HR in 59 G, club on 124 |
+|---|---|---|
+| **On Pace (Healthy)** | keeps what's banked, adds the rest of the way at his current rate | **28 HR in 97 G** |
+| **On Pace (As-Is)** | carries the missed time forward | **22 HR in 77 G** |
+
+Healthy is the closer read of FanGraphs' *equivalent games played*, and the one you probably want on
+air. As-Is is the blunt "162 ÷ club games" pace.
+
+For pitchers the healthy version projects remaining **appearances**, not the club's remaining games
+— a starter's per-outing rate spread across all 38 remaining games would be nonsense. A starter is
+assumed to take the ball every fifth game, a reliever in about 40% of them, so Rodón's 46.1 IP
+paces to 85.1 rather than something absurd.
 
 Only counting stats are scaled. AVG/OBP/SLG/OPS and ERA/WHIP are rates and are shown unchanged and
 labelled as such — projecting them forward would just restate today's number while implying it was
-a forecast. Innings round to real thirds, so 46.1 IP paces to 60.2, not 60.33.
+a forecast. Innings round to real thirds, so 46.1 paces to 60.2, not 60.33.
 
-**This is not FanGraphs' projection.** Their on-pace numbers aren't fetchable — the site sits behind
-a bot challenge and would be blocked by CORS from a browser regardless — so this is computed here
-from the same StatsAPI line as everything else, and labelled as a pace rather than as anyone's
-projection system.
+**Neither is FanGraphs' number.** Their on-pace figures aren't fetchable — the site answers
+automated requests with a bot challenge, and a browser would be blocked by CORS regardless — so
+these are computed from the same StatsAPI line as everything else, and the graphic says which
+assumption produced it rather than implying a projection system.
 
 **Custom date range** — **Stats from / to** in the header. Leave the end blank for "from this date
 until now". It applies to whatever you're looking at: players get a **Custom Range** pill, and team

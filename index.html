@@ -920,7 +920,8 @@ function paintSearch() {
 
 const TF = [
   ['season', 'FULL SEASON'],
-  ['pace', 'ON PACE'],
+  ['pace', 'ON PACE (HEALTHY)'],
+  ['paceAsIs', 'ON PACE (AS-IS)'],
   ['7', 'LAST 7 DAYS'],
   ['14', 'LAST 14 DAYS'],
   ['30', 'LAST 30 DAYS'],
@@ -928,7 +929,7 @@ const TF = [
   ['vr', 'VS RIGHTIES'],
 ];
 const isSplitTf = tf => tf === 'vl' || tf === 'vr';
-const isPace = tf => tf === 'pace';
+const isPace = tf => tf === 'pace' || tf === 'paceAsIs';
 
 // ── on-pace projection ────────────────────────────────────────────────────────────────────────
 // FanGraphs' own on-pace numbers aren't fetchable — the site sits behind a bot challenge and would
@@ -940,6 +941,11 @@ const isPace = tf => tf === 'pace';
 // played. Scaling by the CLUB's games rather than the player's is deliberate — it carries missed
 // time forward instead of assuming a player who has been hurt suddenly plays every remaining game.
 const SEASON_GAMES = 162;
+// A healthy starter takes the ball about every fifth game; a healthy reliever appears in roughly
+// 40% of them. Needed because a pitcher's remaining APPEARANCES aren't the club's remaining games —
+// projecting a starter's per-outing rate across all 38 remaining games would be nonsense.
+const STARTER_TURN = 5;
+const RELIEVER_SHARE = 0.40;
 let teamGamesCache = null;
 async function teamGamesPlayed(teamId, year) {
   if (!teamGamesCache) {
@@ -1023,9 +1029,10 @@ async function annotateEmpty(pid, group, tf, year) {
 // would just restate today's number while implying it was a forecast.
 function paceBatting(st) {
   const m = st.__mult;
+  const healthy = st.__pace === 'healthy';
   return {
-    label: `ON PACE \u00b7 ${SEASON_GAMES} G`,
-    hitLine: `${paceInt(st.gamesPlayed, m)} G PROJ \u00b7 ${st.avg}/${st.obp}/${st.slg} HELD`,
+    label: healthy ? 'ON PACE' : 'ON PACE \u00b7 AS-IS',
+    hitLine: `${st.__projG} G PROJ \u00b7 ${healthy ? 'HEALTHY REST OF WAY' : 'MISSED TIME CARRIED'}`,
     cells: [['HR', paceInt(st.homeRuns, m)], ['RBI', paceInt(st.rbi, m)], ['R', paceInt(st.runs, m)],
             ['H', paceInt(st.hits, m)], ['SB', paceInt(st.stolenBases, m)],
             ['BB', paceInt(st.baseOnBalls, m)], ['K', paceInt(st.strikeOuts, m)]],
@@ -1033,9 +1040,10 @@ function paceBatting(st) {
 }
 function pacePitching(st) {
   const m = st.__mult;
+  const healthy = st.__pace === 'healthy';
   return {
-    label: `ON PACE \u00b7 ${SEASON_GAMES} G`,
-    hitLine: `${st.era} ERA \u00b7 ${st.whip} WHIP HELD`,
+    label: healthy ? 'ON PACE' : 'ON PACE \u00b7 AS-IS',
+    hitLine: `${st.__projG} APPS PROJ \u00b7 ${healthy ? 'HEALTHY REST OF WAY' : 'MISSED TIME CARRIED'}`,
     cells: [['IP', paceIP(st.inningsPitched, m)], ['K', paceInt(st.strikeOuts, m)],
             ['W', paceInt(st.wins, m)], ['L', paceInt(st.losses, m)],
             ['SV', paceInt(st.saves, m)], ['BB', paceInt(st.baseOnBalls, m)]],
@@ -1107,7 +1115,8 @@ function dateRangeForDays(n) {
 // group is 'hitting' | 'pitching' | omitted — the vs-L/R label reads differently depending on
 // which side of the ball it's describing (a hitter faces LHP, a pitcher faces LHB)
 function tfLabel(tf, year, group) {
-  if (tf === 'pace') return `ON PACE \u00b7 ${SEASON_GAMES} G`;
+  if (tf === 'pace') return 'ON PACE';
+  if (tf === 'paceAsIs') return 'ON PACE \u00b7 AS-IS';
   if (tf === 'range') return rangeLabel();
   if (tf === 'season') return `${year} SEASON`;
   if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
@@ -1120,10 +1129,31 @@ async function fetchStat(pid, group, tf, year) {
     const st = await fetchStat(pid, group, 'season', year);
     if (!st) return null;
     const row = modalRow && String(modalRow.id) === String(pid) ? modalRow : null;
-    const gp = row && row.teamId ? await teamGamesPlayed(row.teamId, year) : 0;
-    if (!gp) return null;                       // no denominator, no honest projection
-    const mult = SEASON_GAMES / gp;
-    return { ...st, __pace: true, __mult: mult, __teamGP: gp };
+    const teamGP = row && row.teamId ? await teamGamesPlayed(row.teamId, year) : 0;
+    if (!teamGP) return null;                   // no denominator, no honest projection
+    const remaining = Math.max(0, SEASON_GAMES - teamGP);
+    const playerG = +st.gamesPlayed || 0;
+
+    // AS-IS: scale everything by the club's season. Missed time is carried forward.
+    if (tf === 'paceAsIs') {
+      return { ...st, __pace: 'asis', __mult: SEASON_GAMES / teamGP,
+               __projG: Math.round(playerG * SEASON_GAMES / teamGP), __teamGP: teamGP };
+    }
+
+    // HEALTHY: keep what's banked and add the rest of the way at the current rate. For a hitter
+    // that's the club's remaining games. For a pitcher it's remaining APPEARANCES — a starter's
+    // per-outing rate spread over every remaining game would be absurd.
+    if (!playerG) return null;
+    let addGames = remaining;
+    if (group === 'pitching') {
+      const starter = (+st.gamesStarted || 0) > (playerG / 2);
+      addGames = starter ? remaining / STARTER_TURN : remaining * RELIEVER_SHARE;
+    }
+    const mult = (playerG + addGames) / playerG;
+    return { ...st, __pace: 'healthy', __mult: mult, __teamGP: teamGP,
+             __projG: Math.round(playerG + addGames),
+             __basis: group === 'pitching'
+               ? `${Math.round(addGames)} MORE APPS` : `${remaining} G LEFT` };
   }
   let url;
   if (tf === 'season') {
