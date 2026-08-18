@@ -246,6 +246,10 @@
   /* ---- control page: on-air status chip ---- */
   .onair{display:flex;align-items:center;gap:10px;margin-top:14px;font-family:var(--font-mono);
     font-size:10px;letter-spacing:.1em;color:var(--text2);text-transform:uppercase}
+  .stale-warn{margin-top:12px;padding:11px 15px;border-radius:var(--radius);
+    background:rgba(255,107,107,.16);border:1px solid rgba(255,107,107,.5);color:#ffd9d9;
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .stale-warn b{color:#fff}
   .onair[hidden]{display:none}   /* author display:flex would otherwise beat the hidden attribute */
   .onair-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none;
     box-shadow:0 0 0 4px var(--red-dim);animation:onair-pulse 1.6s ease-in-out infinite}
@@ -2469,6 +2473,25 @@ if (isDisplayMode) {
     setConn(false);
   }
   updateConnHint();
+  // Chrome and OBS both cache this page hard (Pages sends max-age=600), and a stale copy fails in
+  // ways that look like the transport is broken. Ask the server what the current build is and say so
+  // loudly if what's running isn't it — an invisible failure becomes an obvious one.
+  (async () => {
+    try {
+      const r = await fetch(location.pathname + '?bust=' + Date.now(), { cache: 'no-store' });
+      const served = (r.headers.get('last-modified') || '');
+      const running = new Date(document.lastModified).toUTCString();
+      if (!served) return;
+      const drift = Math.abs(new Date(served) - new Date(document.lastModified));
+      if (drift > 60000) {                       // more than a minute apart is a genuinely old copy
+        const b = el('div', 'stale-warn');
+        b.innerHTML = 'You are running an <b>old cached copy</b> of this page. '
+          + 'Press <b>Cmd+Shift+R</b> to load the current build, then re-copy the display URL into OBS.';
+        document.querySelector('header').appendChild(b);
+      }
+    } catch {}
+  })();
+
   // Keep probing, not just once at load: if the relay dies mid-show — laptop sleeps, someone
   // Ctrl+C's it — the chip needs to go grey before he clicks a player and wonders why OBS froze.
   const probe = () => fetch(relayURL('/state'), { cache: 'no-store' })

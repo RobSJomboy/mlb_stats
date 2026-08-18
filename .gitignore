@@ -7,3 +7,6 @@ __pycache__/
 
 # baked-out graphics — regenerate them from the app, don't commit them
 *-lower-third.png
+
+# wrangler local state — contains account details, not for the repo
+relay/.wrangler/
