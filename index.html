@@ -614,6 +614,12 @@ function initialRelay() {
 let HUB = initialRelay();
 const hubURL = room => `${HUB}/r/${encodeURIComponent(room)}`;
 
+// Without this a dead host's fetch never settles: the request hangs, the connection pool fills, and
+// any "did it send?" bookkeeping that waits on it never runs. ntfy.sh being down was doing exactly
+// that.
+const NET_TIMEOUT_MS = 6000;
+const tfetch = (url, opts) => fetch(url, { ...(opts || {}), signal: AbortSignal.timeout(NET_TIMEOUT_MS) });
+
 const NTFY_HOSTS = (params.get('ntfy') ? [params.get('ntfy').replace(/\/$/, '')] : [
   'https://ntfy.sh',
   'https://ntfy.envs.net',
@@ -1390,7 +1396,7 @@ function publishTopic(payload) {
   if (HUB) {
     // Don't mark the connection dead when the relay fails — the fallback may well carry it, and a
     // red pill while you are actually on air is a false alarm that costs more than it saves.
-    fetch(hubURL(TOPIC), { method: 'POST', body })
+    tfetch(hubURL(TOPIC), { method: 'POST', body })
       .then(r => { if (r.ok) setConn(true, 'relay'); else ntfyPublish(body); })
       .catch(() => ntfyPublish(body));
     return;
@@ -1399,13 +1405,14 @@ function publishTopic(payload) {
 }
 
 function ntfyPublish(body) {
-  // Green if ANY host took it — one mirror is all it takes to reach OBS.
+  // Green on the FIRST host that takes it. Waiting for every host to settle meant one dead host
+  // held the verdict forever, so the pill sat red while the message was already on air.
   let anyOk = false, settled = 0;
   NTFY_HOSTS.forEach(host => {
-    fetch(`${host}/${encodeURIComponent(TOPIC)}`, { method: 'POST', body })
-      .then(r => { if (r.ok) anyOk = true; })
+    tfetch(`${host}/${encodeURIComponent(TOPIC)}`, { method: 'POST', body })
+      .then(r => { if (r.ok && !anyOk) { anyOk = true; setConn(true, 'ntfy'); } })
       .catch(() => {})
-      .finally(() => { if (++settled === NTFY_HOSTS.length) setConn(anyOk); });
+      .finally(() => { if (++settled === NTFY_HOSTS.length && !anyOk) setConn(false); });
   });
 }
 
@@ -1652,8 +1659,12 @@ let ltState = { cards: [], index: 0, cycle: false, intervalMs: 7000, live: true 
 let ltCycleTimer = null;
 let ltSig = null;
 
+// null  = take it off air (an explicit clear)
+// undefined = not a payload we understand; leave whatever is on screen alone. Anything else on the
+// topic — a stray probe, another tool, a half-written message — must never blank a live graphic.
 function normalizePayload(p) {
-  if (!p || p.clear) return null;
+  if (p && p.clear) return null;
+  if (!p || typeof p !== 'object') return undefined;
   if (Array.isArray(p.cards)) return p;
   // a v1 payload — an OBS Browser Source running a cached copy of the old page can still send
   // these, and mid-show is the worst time to find out the shapes don't match
@@ -1663,7 +1674,7 @@ function normalizePayload(p) {
               sub: [p.pos, p.team].filter(Boolean).join('  \u00b7  '),
               label: p.data.label, hitLine: p.data.hitLine, cells: p.data.cells }],
   };
-  return null;
+  return undefined;
 }
 
 // Everything that affects what's on screen, and nothing else. `ts` is deliberately excluded:
@@ -1742,6 +1753,7 @@ function renderOnAirBar(raw) {
   if (ts && ts < lastAppliedTs) return;
   if (ts) lastAppliedTs = ts;
   const p = normalizePayload(raw);
+  if (p === undefined) return;            // unrecognised — leave the graphic as it is
   const sig = payloadSig(p);
   // The same message arrives twice by design — SSE delivers it and the polling safety net
   // delivers it again — and the load backfill replays several at once. Without this guard each
@@ -1867,7 +1879,7 @@ function initTopicDisplay() {
       const from = since != null ? since : sincePoll;
       if (since == null) sincePoll = Math.floor(Date.now() / 1000);
       try {
-        const res = await fetch(`${host}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
+        const res = await tfetch(`${host}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
         const text = await res.text();
         bump();
         text.split('\n').filter(Boolean).forEach(line => {
@@ -1902,7 +1914,7 @@ function initHubDisplay() {
   }, 5000);
   const poll = async () => {
     try {
-      const r = await fetch(hubURL(TOPIC) + '?t=' + Date.now(), { cache: 'no-store' });
+      const r = await tfetch(hubURL(TOPIC) + '?t=' + Date.now(), { cache: 'no-store' });
       const t = await r.text();
       if (t && t !== 'null') { lastAt = Date.now(); renderOnAirBar(JSON.parse(t)); }
     } catch {}
