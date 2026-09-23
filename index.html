@@ -745,10 +745,26 @@ const BUILD = (document.lastModified || '').replace(/\D/g, '').slice(0, 14);
 // of extra setup. ntfy stays wired as an automatic fallback so nothing gets worse if the relay is
 // unset or unreachable.
 const RELAY_KEY_STORE = 'tb-relay-url';
+// Our own relay, and the default, because the public ntfy hosts spent more of this season rate
+// limiting us than carrying the show. It costs nothing on the Workers free plan, it takes a
+// payload forty times the size ntfy will accept, and a Browser Source that OBS just refreshed is
+// caught up off its stored state rather than waiting for the next click.
+//
+// The URL is not a secret — same threat model as a public ntfy topic, which is why the room name
+// carries a random tail. Clearing the Relay box goes back to ntfy and is remembered.
+const DEFAULT_HUB = 'https://jomboy-relay.jomboymedia.workers.dev';
+const RELAY_NONE = '-';
 function initialRelay() {
   const p = params.get('relay2') || params.get('hub') || '';
   if (p) return p.replace(/\/$/, '');
-  try { return (localStorage.getItem(RELAY_KEY_STORE) || '').replace(/\/$/, ''); } catch { return ''; }
+  // A saved choice wins, including a deliberate "no relay" — that's what the NONE marker is for.
+  // Without it, clearing the box would just fall back to the default on the next load, and there
+  // would be no way to go back to plain ntfy.
+  let saved = null;
+  try { saved = localStorage.getItem(RELAY_KEY_STORE); } catch {}
+  if (saved === RELAY_NONE) return '';
+  if (saved) return saved.replace(/\/$/, '');
+  return DEFAULT_HUB;
 }
 let HUB = initialRelay();
 const hubURL = room => `${HUB}/r/${encodeURIComponent(room)}`;
@@ -2904,9 +2920,18 @@ function updateConnHint() {
 // Setting a relay makes it the primary path immediately; clearing the box goes back to ntfy.
 $('hubSave').onclick = () => {
   HUB = ($('hubInput').value || '').trim().replace(/\/$/, '');
-  try { HUB ? localStorage.setItem(RELAY_KEY_STORE, HUB) : localStorage.removeItem(RELAY_KEY_STORE); } catch {}
+  // An empty box is a decision, not an absence: it's stored as NONE so the default doesn't come
+  // straight back on the next load.
+  try { localStorage.setItem(RELAY_KEY_STORE, HUB || RELAY_NONE); } catch {}
   const hint = $('connHint');
-  if (!HUB) { hint.textContent = 'Relay cleared — back to the public ntfy hosts.'; hint.className = 'hint'; loadPreview(true); return; }
+  if (!HUB) {
+    hint.textContent = 'Relay cleared — back to the public ntfy hosts, which are the ones that keep '
+      + 'rate limiting. Paste the workers.dev URL back in to undo.';
+    hint.className = 'hint';
+    if (TOPIC) publishTopic(null);
+    loadPreview(true);
+    return;
+  }
   fetch(HUB + '/', { cache: 'no-store' }).then(r => r.json()).then(j => {
     hint.textContent = j && j.service === 'jomboy-relay'
       ? 'Relay reachable. It rides along in the copied links, so the other machine picks it up.'

@@ -568,6 +568,28 @@ rate limit an address; listed first, the host most likely to be 429 was also the
 be believed. The pill now says **rate limited** rather than "not reaching topic" — same red light,
 completely different problem and completely different fix.
 
-**The durable fix is your own relay.** `relay/` holds a Cloudflare Worker, free plan, no card:
-`npx wrangler login && npx wrangler deploy`, then paste the `https://….workers.dev` URL into the
-Relay box. It rides along in the copied links, so the OBS machine inherits it.
+## The relay (deployed, and the default)
+
+**ntfy is now the fallback, not the path.** `relay/` holds a small Cloudflare Worker — one Durable
+Object per room — and it is live at:
+
+```
+https://jomboy-relay.jomboymedia.workers.dev
+```
+
+Both pages use it by default. Nothing to paste, nothing to remember. Measured against it:
+
+- **A 7,015-byte payload — a full 16-game scroll — delivered intact.** ntfy turns anything over
+  ~4KB into an attachment and the graphic silently never updates. The relay's ceiling is 512KB.
+- **Zero ntfy requests** while it's in use, so there is no rate limit to hit.
+- **A refreshed Browser Source caught up in 116ms**, stat bar and all 99 scroll items, off the
+  Durable Object's stored state rather than waiting for the next click.
+
+Clearing the **Relay** box goes back to the public ntfy hosts, and that choice is remembered — an
+empty box is stored as a decision rather than as an absence, so the default doesn't silently
+reappear on the next load. `?relay2=` overrides both, and rides along in the copied links.
+
+**Redeploy** after editing `relay/worker.js`: `npx wrangler deploy` from inside `relay/`.
+
+A room name is public to anyone who knows it, exactly like an ntfy topic — so keep the random tail
+on the suggested one.
