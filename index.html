@@ -376,11 +376,18 @@
     border-radius:20px;overflow:hidden;      /* so the gold rule follows the curve */
     box-shadow:0 22px 60px rgba(0,0,0,.5), 0 4px 16px rgba(0,0,0,.3);
     box-sizing:border-box;pointer-events:none;
+    /* The whole lockup is scaled rather than every dimension inside it being re-specified: one
+       number keeps the proportions the design was drawn at, and sizeCells() goes on measuring the
+       unscaled layout width so the stat columns still fill the bar exactly as before. Anchored
+       bottom-left, so shrinking it leaves the left edge and the height off the floor where they
+       were rather than sliding the graphic around the frame. */
+    transform-origin:left bottom;
     /* coming on air it pushes up from below and settles; going off it drops back down. The ease
-       is deliberately asymmetric — quick to leave the bottom, slow to settle. */
-    opacity:0;transform:translateY(150px);
+       is deliberately asymmetric — quick to leave the bottom, slow to settle. The slide is outside
+       the scale, so it stays a 150px slide at any size. */
+    opacity:0;transform:translateY(150px) scale(var(--lt-scale,.5));
     transition:opacity .34s ease, transform .52s cubic-bezier(.16,.84,.32,1)}
-  .lt-bar.lt-visible{opacity:1;transform:translateY(0)}
+  .lt-bar.lt-visible{opacity:1;transform:translateY(0) scale(var(--lt-scale,.5))}
 
   .lt-figure{flex:none;opacity:1;transition:opacity .22s ease}
   .lt-figure.swapping{opacity:0}
@@ -523,6 +530,8 @@
     <div><label for="rangeStart">Stats from</label><input id="rangeStart" type="date"></div>
     <div><label for="rangeEnd">to (blank = today)</label><input id="rangeEnd" type="date"></div>
     <div><label>&nbsp;</label><button id="rangeClear" type="button">Clear Range</button></div>
+    <div><label for="ltSize">Graphic size %</label>
+      <input id="ltSize" type="number" value="50" min="25" max="100" step="5" style="width:96px"></div>
     <div><label>Relay</label>
       <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
     </div>
@@ -1702,6 +1711,10 @@ let cycleSecs = 7;
 // DISPLAY LIVE switch kills both; Scroll In / Scroll Out only touches this one. tkGames is kept
 // apart from tkItems so his own lines can be edited without re-reading every box score.
 let tkOn = false, tkItems = [], tkGames = [], tkSpeedV = 130, tkBottomV = 100;
+// How big the stat bar is drawn, as a percentage of the size it was designed at. Kept on this
+// machine so it survives a reload — it's a look-of-the-show setting, not a per-graphic one.
+let barScale = 50;
+const BAR_SCALE_KEY = 'tb-bar-scale';
 
 const cardFromData = (kind, id, name, sub, data) =>
   ({ kind, id, name, sub, label: data.label, hitLine: data.hitLine, cells: data.cells });
@@ -1718,6 +1731,7 @@ function broadcast() {
   const payload = (barOn || tickOn) ? Object.assign({
     v: 2, live: barOn, cards: barOn ? onAirCards : [], index: barOn ? onAirIndex : 0,
     cycle: onAirCycle, intervalMs: cycleSecs * 1000, ts: Date.now(),
+    scale: barScale,
     ticker: { on: tickOn, items: tickOn ? tkItems : [], speed: tkSpeedV, bottom: tkBottomV },
   // v1 mirror of whatever is showing. An OBS Browser Source running a cached copy of the older
   // page reads these and keeps working (single card, no cycling) instead of going blank —
@@ -1882,10 +1896,26 @@ function normalizePayload(p) {
   return undefined;
 }
 
-// Everything that affects what's on screen, and nothing else. `ts` is deliberately excluded:
-// it changes on every publish, and including it would defeat the whole point of the guard.
+// Everything that affects WHAT is on screen, and nothing else. `ts` is deliberately excluded: it
+// changes on every publish, and including it would defeat the whole point of the guard.
+//
+// The live-adjustable geometry — the graphic's size, and the scroll's pace and height — is
+// excluded too, and applied before this guard runs. Signing it meant nudging the scroll's height
+// re-entered renderOnAirBar and cross-faded the stat block underneath it for no reason.
 function payloadSig(p) {
-  return p ? JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards, p.ticker]) : 'OFF';
+  if (!p) return 'OFF';
+  const t = p.ticker;
+  return JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards,
+                         t ? [!!t.on, t.items] : null]);
+}
+
+// Size is applied straight to the bar and deliberately kept OUT of the payload signature below:
+// dragging it while a graphic is live should resize what's on screen, not cross-fade it.
+function applyBarScale(pct) {
+  const n = Math.max(25, Math.min(100, +pct || 0));
+  if (!n) return;                 // absent from an older payload — leave the CSS default alone
+  const bar = $('ltBar');
+  if (bar) bar.style.setProperty('--lt-scale', (n / 100).toFixed(3));
 }
 
 const cardImage = card => card.kind === 'team' ? logoURL(card.id) : headshotURL(card.id);
@@ -1978,6 +2008,10 @@ function renderOnAirBar(raw) {
   if (ts) lastAppliedTs = ts;
   const p = normalizePayload(raw);
   if (p === undefined) return;            // unrecognised — leave the graphic as it is
+  // Geometry first, and outside the guard below: these are the knobs you turn while something is
+  // already on air, and they have to take effect without redrawing what they're adjusting.
+  applyBarScale(p && p.scale);
+  renderTicker(p && p.ticker);
   const sig = payloadSig(p);
   // The same message arrives twice by design — SSE delivers it and the polling safety net
   // delivers it again — and the load backfill replays several at once. Without this guard each
@@ -1985,10 +2019,6 @@ function renderOnAirBar(raw) {
   // there. Identical content must never touch the DOM.
   if (sig === ltSig) return;
   ltSig = sig;
-
-  // The scroll is its own graphic with its own on/off — a payload can carry one, the other, or
-  // both, and taking the stat bar down must not take the scroll down with it.
-  renderTicker(p && p.ticker);
 
   clearInterval(ltCycleTimer); ltCycleTimer = null;
   clearTimeout(ltFadeTimer);
@@ -3108,6 +3138,15 @@ $('tkSpeed').onchange = () => {
   $('tkSpeed').value = tkSpeedV;
   if (tkOn) broadcast();
 };
+// Applied to whatever is already on air rather than redrawing it, so this can be dialled in with
+// the graphic live and the numbers on screen just grow or shrink.
+$('ltSize').onchange = () => {
+  barScale = Math.max(25, Math.min(100, +$('ltSize').value || 50));
+  $('ltSize').value = barScale;
+  try { localStorage.setItem(BAR_SCALE_KEY, String(barScale)); } catch {}
+  broadcast();
+};
+
 $('tkBottom').onchange = () => {
   tkBottomV = Math.max(0, Math.min(940, +$('tkBottom').value || 100));
   $('tkBottom').value = tkBottomV;
@@ -3128,6 +3167,8 @@ if (isDisplayMode) {
   initDisplay();
 } else {
   $('hubInput').value = HUB;
+  try { barScale = Math.max(25, Math.min(100, +localStorage.getItem(BAR_SCALE_KEY) || 50)); } catch {}
+  $('ltSize').value = barScale;
   $('tkDate').value = isoLocal(new Date());
   tkPaint();
   const stamp = $('buildStamp');

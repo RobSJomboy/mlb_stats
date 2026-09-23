@@ -303,6 +303,26 @@ The rest of the bar is unaffected.
 
 ---
 
+## Size
+
+**Graphic size %** in the top controls, default **50**. It scales the whole stat bar — box, crest,
+name, numbers, ranks — as one piece, anchored bottom-left, so the left edge and the height off the
+floor stay where they were and only the footprint changes. At 50 the bar is 900x125 in a 1920x1080
+frame instead of 1800x250.
+
+It's a single transform rather than every dimension being re-specified, which means the proportions
+stay exactly as drawn and `sizeCells()` goes on measuring the unscaled layout width — the stat
+columns still fill the bar the same way at any size.
+
+**The trade-off is the numbers.** At 50% a stat reads about 44px tall rather than 88. That's still a
+normal broadcast size, but it is half of what it was, so if a host is reading off a monitor across
+the room, push this back up — 65–70 is a good middle. It applies to whatever is already on air
+without redrawing it, so it can be dialled in live.
+
+Saved per machine, so it survives a reload.
+
+---
+
 ## Next 3 Games — probable starters
 
 A card beside **Next 3 Series**: the club's next three games, each with the crest, when it is, and
@@ -494,3 +514,7 @@ from the same machine each month, or the petals won't follow.
   #2` comes back as id 4944 with a name and an abbreviation, so nothing about the response says
   "placeholder" — but `logoURL` 404s on it. The test used here is membership of `teamsById`, which
   holds exactly the 30 clubs.
+- **Live-adjustable geometry must stay out of the payload signature.** Graphic size and the
+  scroll's pace and height are applied before the signature check, not signed. They were signed
+  once, and the result was that nudging the scroll's height re-entered the render and cross-faded
+  the stat block underneath it — a graphic blinking every time an unrelated slider moved.
