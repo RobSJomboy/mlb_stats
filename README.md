@@ -20,6 +20,18 @@ be served from GitHub Pages rather than opened off disk — Settings → Pages �
 
 ## What's in it
 
+**Regular season or postseason** — the **Stat set** dropdown next to Season. It carries through
+everything: player cards, the splits, the team categories and their ranks. Postseason is the
+aggregate of the wild card, division series, LCS and World Series rather than any one round,
+because that's what "his postseason numbers" means on air.
+
+Two things change in postseason mode, both on purpose:
+
+- **The two on-pace pills disappear.** A pace needs a 162-game denominator and October hasn't got
+  one; projecting a division series across a full season would be a made-up number.
+- **Ranks are out of however many clubs actually played** — "4th of 12", not "4th of 30". The
+  denominator is counted from the response rather than assumed.
+
 **Team directory** — all 30 clubs, grouped by league and division. Filter to one division with the
 Division dropdown, or jump straight to a club with the Team dropdown.
 
@@ -291,12 +303,61 @@ The rest of the bar is unaffected.
 
 ---
 
+## The bottom scroll
+
+A white ticker across the bottom, in Rift caps, `#09334f` on white with a blue rule. Its own
+graphic with its own on/off — the stat bar can come and go underneath it without the scroll
+reacting, and vice versa. **DISPLAY LIVE / OFF AIR** still kills both at once.
+
+**Load Scores** reads every game on a date and builds the strip:
+
+- **The score**, with `FINAL` or `FINAL/10`. Games still in progress come through too, tagged with
+  the half and the inning.
+- **Both starting pitchers**, marked `W` / `L` / `SP`, plus the save.
+- **The two best nights of the game**, across both clubs — weighted so a homer or a three-RBI night
+  beats a quiet 2-for-5, and dropped entirely if nobody did anything worth saying.
+- **Anyone who mattered and did nothing**, inverted into a solid blue block so it reads across a
+  studio: a name with 25+ homers or an .850 OPS who went 0-for-4. That's the highlight.
+
+The date box defaults to today and **falls back one day by itself** if today has no scores yet —
+before first pitch, last night's slate is what a show wants anyway. The box updates so you can see
+it happened.
+
+**Your own lines** go in the textarea, one per line, and run first. They're typed by a human and go
+on screen through `textContent`, so an apostrophe or a stray `<` can't rewrite the graphic.
+
+### How it moves
+
+The bar comes in from the right and stops with its left edge **10px off frame**. The words are on
+their own transform inside it — they leave 120ms later and take 100ms longer, so they trail slightly
+and settle a beat after the bar has already stopped. Then they keep travelling left on their own,
+easing up from rest so there's no step where the entry hands over. On the way out, bar and words
+leave together to the left.
+
+That's two transforms rather than one on purpose: a single animation can't stop the bar and keep
+the words going, and two animations on one element fight.
+
+**It sits 100px off the bottom by default, which is what was asked for — but the stat bar sits 150px
+up and is 250px tall, so with both on screen at once the scroll covers the bottom 28px of it.**
+That's what the **Px off bottom** box is for: drop it to 0 and the two clear each other completely.
+Leave it at 100 if you never run both together.
+
+**Scroll px/sec** and **Px off bottom** apply to a scroll that's already running — nudging either
+won't make the strip duck out and come back. Changing the *words* will, deliberately: the old strip
+exits left and the new one comes in, so the swap reads as a decision rather than the text jumping.
+
+A full 16-game slate is about 45,000px of strip. At 130px/sec that's roughly six minutes for one
+lap, so turn the speed up if you want it round quicker.
+
+---
+
 ## Look
 
 Shared with the rest of the Talkin' Baseball tools:
 
 - Navy `#0d1f2d` → `#173a56`, gold `#fbcc7a`
 - Bebas Neue for names and numbers, DM Sans for body copy, DM Mono for labels
+- Rift caps and `#09334f` on white for the bottom scroll — the standings/All-JM scroll lockup
 - Gold rule across the top of the lower third, gold ring on the headshot
 
 The bar floats: 250px tall, inset 60px each side, sitting **150px above the bottom** of a 1920×1080
@@ -388,3 +449,18 @@ Browser Source without re-aligning anything.
 Rosters and petal history live in `localStorage` on the control machine, keyed by season and month,
 so last month's board is still there next time. **That means the history is per browser** — drive
 from the same machine each month, or the petals won't follow.
+
+- **A box score is 300KB; `fields=` cuts it to 40.** A full slate is sixteen of them, so that's the
+  difference between a 600KB read and a 5MB one on studio wifi. Everything the scroll needs —
+  including each batter's *season* line, which is how "does this name matter" gets answered — is in
+  that one filtered request, so there is no second leaderboard call.
+- **The starter is the first id in the club's `pitchers` array**, which is the order the game was
+  actually pitched in. Sorting the players map instead gives you whoever happens to come first.
+- **`requestAnimationFrame` is throttled to about 1fps in a Browser Source OBS has backgrounded**,
+  so the scroll's motion is set as inline transitions with a forced reflow between states rather
+  than class swaps riding on a frame that may not arrive. The travelling scroll caps its frame
+  delta at 100ms for the same reason: a backgrounded source that comes back should resume, not
+  teleport half a screen.
+- **The ticker payload is signed on its items alone.** Pace and height are applied live and left
+  out of the signature on purpose — otherwise dialling in the speed mid-show would take the whole
+  strip off and bring it back.

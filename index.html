@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Rift, for the bottom scroll. Same source the standings and All-JM builds use, so the two
+     scrolls can't drift apart on air. -->
+<link href="https://fonts.cdnfonts.com/css/rift" rel="stylesheet">
 <style>
   :root{
     --bg:#0d1f2d;
@@ -65,11 +68,11 @@
   .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:14px}
   label{display:block;font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;
     text-transform:uppercase;color:var(--gold);margin-bottom:5px;opacity:.85}
-  select,input{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  select,input,textarea{background:var(--surface);color:var(--text);border:1px solid var(--border);
     border-radius:var(--radius);padding:8px 10px;font-family:var(--font-body);font-size:14px;
     max-width:min(60vw,520px)}
-  select:focus,input:focus{outline:none;border-color:var(--gold)}
-  input::placeholder{color:var(--text3)}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold)}
+  input::placeholder,textarea::placeholder{color:var(--text3)}
   select option{background:var(--navy-dark);color:var(--text)}
 
   #status{padding:16px 22px;color:var(--text2);font-size:13px}
@@ -308,6 +311,32 @@
     color:var(--text3);text-align:center;padding:0 20px}
   .preview-empty[hidden]{display:none}
 
+  /* ---- bottom-scroll control: full width under the preview and the card ---- */
+  .tkpanel{flex:1 1 100%;background:var(--navy-dark);border:1px solid var(--border2);
+    border-radius:var(--radius-lg);padding:14px 18px 16px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+  .tkp-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .tkp-head .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--gold);opacity:.85}
+  .tkp-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:11px}
+  .tkp-row .chk{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--text2);padding-bottom:9px}
+  .tkp-row .chk input{width:auto;min-width:0}
+  .tkp-row input[type=number]{width:96px}
+  .tkpanel textarea{width:100%;max-width:none;resize:vertical;font-family:var(--font-mono);
+    font-size:13px;line-height:1.5}
+  .tkp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;max-height:136px;overflow:auto}
+  .tkp-chip{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:4px;
+    padding:5px 9px;white-space:nowrap}
+  .tkp-chip.score{color:var(--gold);border-color:rgba(251,204,122,.35)}
+  .tkp-chip.hot{color:var(--navy-dark);background:var(--gold);border-color:var(--gold)}
+  .tkp-empty{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--text3)}
+  .tkp-live{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text3);border:1px solid var(--border);border-radius:20px;padding:5px 11px}
+  .tkp-live.on{color:var(--green);border-color:rgba(95,221,170,.35);background:var(--green-dim)}
+  .tkp-live.on::before{content:"\25b6  "}
+
   /* ---- the URL to paste into the OBS machine's Browser Source ---- */
   .obsurl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
     background:var(--gold-dim2);border:1px solid var(--border);border-radius:var(--radius);
@@ -323,7 +352,10 @@
 
   /* ---- OBS display view (?display=1) ---- */
   #lowerThirdDisplay{display:none}
-  body.display-mode #lowerThirdDisplay{display:block;position:relative;width:1920px;height:1080px}
+  /* overflow:hidden because the scroll rests off the right edge at x=1990 when it is not on air,
+     and a 3800px-wide page in a Browser Source is a scrollbar waiting to happen */
+  body.display-mode #lowerThirdDisplay{display:block;position:relative;width:1920px;height:1080px;
+    overflow:hidden}
   /* always present in the DOM (it's position:absolute, so it never affects layout) — shown/hidden and
      swapped between players purely via opacity, so bringing it on, taking it off, or switching to a
      new player all get a smooth fade instead of an instant pop */
@@ -394,7 +426,45 @@
     color:#ffffff;letter-spacing:.02em;white-space:nowrap;margin-top:9px}
   .lt-cell .d{font-family:'DM Mono',monospace;font-weight:400;font-size:14px;
     color:rgba(255,255,255,.62);letter-spacing:.12em;white-space:nowrap;margin-top:6px}
-  body.display-mode{background:transparent}
+  /* ---- bottom scroll -----------------------------------------------------------------------
+     White card, blue rule, Rift caps. It arrives as one piece from the right: the bar eases in
+     until its left edge sits 10px off frame and stops there, and the words - on their own slightly
+     longer, slightly delayed ease - settle a beat later and then keep travelling left on their own.
+     Leaving, bar and words go out together to the left. */
+  /* Only the resting position lives here. Every move is set from JS as an inline transition:
+     class-swapped transitions were not reliably committing in a Browser Source that OBS has
+     backgrounded, because the change was riding on a requestAnimationFrame the browser throttles
+     to about one frame a second when the page is hidden. Inline styles with a forced reflow
+     between them don't depend on a frame ever arriving. */
+  .tkr{position:absolute;left:10px;bottom:100px;width:1900px;height:78px;box-sizing:border-box;
+    background:#ffffff;border:3px solid #09334f;border-radius:6px;
+    box-shadow:0 12px 34px rgba(0,0,0,.34);overflow:hidden;pointer-events:none;
+    transform:translateX(1990px)}
+  /* The trail is a second transform inside the bar, so "slightly behind" is a real offset rather
+     than two animations fighting over one element. */
+  .tkr-trail{position:absolute;inset:0;transform:translateX(320px)}
+  .tkr-track{position:absolute;top:0;left:0;height:100%;display:flex;align-items:center;
+    white-space:nowrap;will-change:transform;
+    font-family:'Rift','Arial Black','Haettenschweiler',sans-serif;
+    color:#09334f;text-transform:uppercase}
+  .tk-copy{display:inline-flex;align-items:center;flex:none}
+  .tk-chip{display:inline-flex;align-items:center;gap:11px;padding:0 20px;flex:none;
+    font-size:33px;line-height:1;letter-spacing:.035em}
+  .tk-chip.score{font-size:41px;letter-spacing:.05em;gap:30px}
+  /* the club and its runs read as one unit; the gap that matters is the one between the clubs,
+     otherwise "TB 6 NYY 1" comes out as four things in a row at a glance */
+  .tk-chip.score .sd{display:inline-flex;align-items:baseline;gap:12px}
+  .tk-chip.score .rn{font-size:47px}
+  .tk-chip.score .tag{font-size:19px;letter-spacing:.2em;opacity:.55;margin-left:3px}
+  .tk-chip .k{font-size:21px;letter-spacing:.2em;opacity:.6}
+  /* the highlight: a star who did nothing is inverted, so it reads at a glance across a studio */
+  .tk-chip.hot{background:#09334f;color:#ffffff;border-radius:5px;padding:9px 18px 7px;margin:0 7px}
+  .tk-chip.hot .k{opacity:.85}
+  .tk-sep{flex:none;width:11px;height:11px;transform:rotate(45deg);background:#09334f;
+    opacity:.5;margin:0 15px}
+  .tk-bar{flex:none;width:2px;height:30px;background:#09334f;opacity:.2;margin:0 3px}
+
+  body.display-mode{background:transparent;overflow:hidden}
   /* Everything that isn't the graphic. The workspace holds the preview and the cards now, and
      leaving it out pushed the bar off the bottom of the 1080 frame in OBS. */
   body.display-mode header, body.display-mode main, body.display-mode #status,
@@ -414,6 +484,10 @@
   </div>
   <div class="controls">
     <div><label for="season">Season</label><select id="season"></select></div>
+    <div><label for="gameType">Stat set</label><select id="gameType">
+      <option value="R">Regular Season</option>
+      <option value="P">Postseason</option>
+    </select></div>
     <div><label for="division">Division</label><select id="division"><option value="">All Divisions</option></select></div>
     <div><label for="team">Team</label><select id="team"><option value="">Select a team…</option></select></div>
     <div><label for="find">Global player search</label><input id="find" type="search" placeholder="Search any MLB player…" autocomplete="off"></div>
@@ -516,6 +590,27 @@
     <div id="teamDlNote" class="modal-dlnote"></div>
   </div>
 </div>
+  <div class="tkpanel" id="tkPanel">
+    <div class="tkp-head">
+      <span class="k">Bottom Scroll</span>
+      <span class="tkp-live" id="tkLiveChip">off</span>
+      <span class="preview-note" id="tkNote">nothing loaded yet</span>
+    </div>
+    <div class="tkp-row">
+      <div><label for="tkDate">Games from</label><input id="tkDate" type="date"></div>
+      <div><label>&nbsp;</label><button id="tkLoad" type="button">Load Scores</button></div>
+      <div><label class="chk" for="tkUseScores">&nbsp;</label>
+        <span class="chk"><input type="checkbox" id="tkUseScores" checked> Include scores</span></div>
+      <div><label for="tkSpeed">Scroll px/sec</label><input id="tkSpeed" type="number" value="130" min="20" max="500" step="10"></div>
+      <div><label for="tkBottom">Px off bottom</label><input id="tkBottom" type="number" value="100" min="0" max="940" step="10"></div>
+      <div><label>&nbsp;</label><button id="tkIn" class="connect-btn" type="button">▶ Scroll In</button></div>
+      <div><label>&nbsp;</label><button id="tkOut" class="exit-btn" type="button">✕ Scroll Out</button></div>
+    </div>
+    <label for="tkText">Your own lines — one per line, these run first</label>
+    <textarea id="tkText" rows="3" spellcheck="false"
+      placeholder="TALKIN&#39; BASEBALL · NEW EPISODE TONIGHT&#10;NEXT UP — THE WAREHOUSE GAMES"></textarea>
+    <div class="tkp-chips" id="tkChips"></div>
+  </div>
 </div>
 <div id="status">Loading…</div>
 <main id="out"></main>
@@ -537,6 +632,11 @@
         <div class="lt-hitline" id="ltHitline"></div>
         <div class="lt-cells" id="ltCells"></div>
       </div>
+    </div>
+  </div>
+  <div class="tkr" id="tkrBar">
+    <div class="tkr-trail" id="tkrTrail">
+      <div class="tkr-track" id="tkrTrack"></div>
     </div>
   </div>
 </div>
@@ -928,6 +1028,14 @@ function paintSearch() {
 // Player modal — timeframe pills (Full Season / Last 7 / 14 / 30 days), hitting + pitching
 // =====================================================================================
 
+// Regular season or postseason. StatsAPI takes a gameType on every shape we use — season,
+// statSplits, byDateRange and the team leaderboards — and gameType=P is the aggregate of the wild
+// card, division series, LCS and World Series rather than any one round, which is what "postseason
+// numbers" means on air. Every cached URL carries it, so switching clears the cache.
+let GT = 'R';
+const gtParam = () => (GT === 'P' ? '&gameType=P' : '');
+const isPost = () => GT === 'P';
+
 const TF = [
   ['season', 'FULL SEASON'],
   ['pace', 'ON PACE (HEALTHY)'],
@@ -991,11 +1099,14 @@ const paceIP = (ip, mult) => {
 // relabelled to say so — the API silently ignores sitCodes on a date range and hands back the
 // undifferentiated line, so a "VS LHP" pill over a window would be quietly wrong.
 function activeTF() {
-  if (!rangeActive()) return TF;
+  // A pace projection needs a 162-game denominator. In the postseason there isn't one, so the two
+  // pace pills come out rather than quietly projecting a division series across a full year.
+  const base = isPost() ? TF.filter(([k]) => !isPace(k)) : TF;
+  if (!rangeActive()) return base;
   // Full season stays in the list — comparing a window against the season is the whole point of
   // having a window.
   return [['range', 'CUSTOM RANGE'],
-          ...TF.map(([k, l]) => isSplitTf(k) ? [k, l + ' (SEASON)'] : [k, l])];
+          ...base.map(([k, l]) => isSplitTf(k) ? [k, l + ' (SEASON)'] : [k, l])];
 }
 let modalPid = null, modalRow = null, modalTf = 'season';
 let modalBat = null, modalPit = null;  // currently-loaded stat objects for the active timeframe
@@ -1128,7 +1239,7 @@ function tfLabel(tf, year, group) {
   if (tf === 'pace') return 'ON PACE';
   if (tf === 'paceAsIs') return 'ON PACE \u00b7 AS-IS';
   if (tf === 'range') return rangeLabel();
-  if (tf === 'season') return `${year} SEASON`;
+  if (tf === 'season') return isPost() ? `${year} POSTSEASON` : `${year} SEASON`;
   if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
   if (tf === 'vr') return group === 'pitching' ? 'VS RHB' : 'VS RHP';
   return `LAST ${tf} DAYS`;
@@ -1176,7 +1287,7 @@ async function fetchStat(pid, group, tf, year) {
     const { startDate, endDate } = dateRangeForDays(+tf);
     url = `${API}/people/${pid}/stats?stats=byDateRange&startDate=${startDate}&endDate=${endDate}&season=${year}&group=${group}`;
   }
-  const d = await jc(url);
+  const d = await jc(url + gtParam());
   const sec = (d.stats || [])[0];
   return sec && sec.splits && sec.splits.length ? sec.splits[0].stat : null;
 }
@@ -1515,24 +1626,36 @@ function copyText(text) {
 let airLive = true;
 let onAirCards = [], onAirCycle = false, onAirIndex = 0, onAirSource = null;
 let cycleSecs = 7;
+// The bottom scroll is a second graphic on the same wire, with its own on/off. The master
+// DISPLAY LIVE switch kills both; Scroll In / Scroll Out only touches this one. tkGames is kept
+// apart from tkItems so his own lines can be edited without re-reading every box score.
+let tkOn = false, tkItems = [], tkGames = [], tkSpeedV = 130, tkBottomV = 100;
 
 const cardFromData = (kind, id, name, sub, data) =>
   ({ kind, id, name, sub, label: data.label, hitLine: data.hitLine, cells: data.cells });
 
 function broadcast() {
   const active = onAirCards[onAirIndex] || onAirCards[0];
+  // The stat bar and the bottom scroll are independent graphics sharing one wire. Either can be up
+  // without the other, so the payload exists if EITHER is live, and `live` refers only to the bar.
+  const barOn = !!(onAirCards.length && airLive && active);
+  const tickOn = !!(tkOn && airLive && tkItems.length);
   // Off air publishes a plain clear rather than live:false. Old display code has no concept of a
   // live flag and would keep rendering; a clear takes the bar down on every version. Nothing is
   // lost — the card set lives on this side and gets republished when it goes back on air.
-  const payload = (onAirCards.length && airLive && active) ? {
-    v: 2, live: true, cards: onAirCards, index: onAirIndex,
+  const payload = (barOn || tickOn) ? Object.assign({
+    v: 2, live: barOn, cards: barOn ? onAirCards : [], index: barOn ? onAirIndex : 0,
     cycle: onAirCycle, intervalMs: cycleSecs * 1000, ts: Date.now(),
-    // v1 mirror of whatever is showing. An OBS Browser Source running a cached copy of the older
-    // page reads these and keeps working (single card, no cycling) instead of going blank —
-    // caches are exactly the thing you can't clear from here mid-show.
+    ticker: { on: tickOn, items: tickOn ? tkItems : [], speed: tkSpeedV, bottom: tkBottomV },
+  // v1 mirror of whatever is showing. An OBS Browser Source running a cached copy of the older
+  // page reads these and keeps working (single card, no cycling) instead of going blank —
+  // caches are exactly the thing you can't clear from here mid-show. Attached only when the BAR is
+  // up: on a scroll-only push there is nothing for an old page to draw, and half a mirror would
+  // have it put an empty lower third on screen.
+  }, barOn ? {
     pid: active.id, kind: 'bat', name: active.name, pos: '', team: active.sub || '',
     data: { label: active.label || active.name, hitLine: active.hitLine || '', cells: active.cells },
-  } : null;
+  } : {}) : null;
   try {
     if (payload) localStorage.setItem(LT_KEY, JSON.stringify(payload));
     else localStorage.removeItem(LT_KEY);
@@ -1571,14 +1694,20 @@ function setAirLive(live) {
 
 function updateOnAirUI(payload, active) {
   const box = $('onair'); if (!box) return;
-  const c = payload ? (payload.cards[payload.index] || payload.cards[0]) : active;
-  box.hidden = !c;
-  if (!c) return;
+  const cards = (payload && payload.cards) || [];
+  // `live` is the bar's flag, not the payload's: a scroll-only push is a real payload with no card
+  // in it, and reading cards[0] regardless would put a stale name back in the strip.
+  const c = payload ? (payload.live ? (cards[payload.index] || cards[0]) : null) : active;
+  const tick = !!(payload && payload.ticker && payload.ticker.on);
+  box.hidden = !c && !tick;
+  if (box.hidden) return;
   const cycling = onAirCycle && onAirCards.length > 1
     ? ` \u00b7 cycling ${onAirCards.length} every ${cycleSecs}s` : '';
   const off = airLive ? '' : ' \u00b7 OFF AIR';
+  const scroll = tick ? ` \u00b7 scroll up (${tkItems.length} items)` : '';
+  if (!c) { $('onairText').innerHTML = `On air: <b>bottom scroll</b> \u00b7 ${tkItems.length} items${off}`; return; }
   const who = c.kind === 'team' ? `${c.teamName || 'Team'} \u00b7 ${c.name}` : `${c.name} \u00b7 ${c.label}`;
-  $('onairText').innerHTML = `On air: <b>${who}</b>${cycling}${off}`;
+  $('onairText').innerHTML = `On air: <b>${who}</b>${cycling}${off}${scroll}`;
 }
 
 // Build the card for one timeframe of one player: hitting for position players, pitching for
@@ -1684,7 +1813,7 @@ function normalizePayload(p) {
 // Everything that affects what's on screen, and nothing else. `ts` is deliberately excluded:
 // it changes on every publish, and including it would defeat the whole point of the guard.
 function payloadSig(p) {
-  return p ? JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards]) : 'OFF';
+  return p ? JSON.stringify([p.live, p.cycle, p.intervalMs, p.index, p.cards, p.ticker]) : 'OFF';
 }
 
 const cardImage = card => card.kind === 'team' ? logoURL(card.id) : headshotURL(card.id);
@@ -1765,6 +1894,10 @@ function renderOnAirBar(raw) {
   // there. Identical content must never touch the DOM.
   if (sig === ltSig) return;
   ltSig = sig;
+
+  // The scroll is its own graphic with its own on/off — a payload can carry one, the other, or
+  // both, and taking the stat bar down must not take the scroll down with it.
+  renderTicker(p && p.ticker);
 
   clearInterval(ltCycleTimer); ltCycleTimer = null;
   clearTimeout(ltFadeTimer);
@@ -1851,6 +1984,171 @@ document.addEventListener('visibilitychange', () => {
   });
   scheduleSizeCells();
 });
+
+// =====================================================================================
+// Bottom scroll (display side)
+// =====================================================================================
+// Items arrive as DATA, never markup. The custom lines are typed by a human and go through
+// textContent, so an apostrophe or a stray < in "A < B" can't rewrite the graphic mid-show.
+//
+// Two transforms, not one: the bar's own slide is a CSS transition, and the words' travel is a
+// rAF loop inside it. That's what lets the bar stop dead at 10px while the words carry on — one
+// animation can't do both, and two animations on one element fight.
+
+const TKR_IN_BAR = 950;    // the bar's own slide, right edge of frame to 10px off the left
+const TKR_LAG = 120;       // how late the words leave, which is what makes them trail
+const TKR_IN_WORDS = 1050; // and they take longer, so they settle after the bar has stopped
+const TKR_IN_MS = TKR_LAG + TKR_IN_WORDS;   // when the travelling scroll takes over
+const TKR_OUT_MS = 620;
+const TKR_RAMP_MS = 700;   // the words ease up from rest rather than snapping to full speed the
+                           // instant the entry finishes, so the handoff has no visible step in it
+const TKR_EASE_IN = 'cubic-bezier(.16,.84,.32,1)';
+const TKR_EASE_OUT = 'cubic-bezier(.5,0,.85,.35)';
+
+let tkrRaf = null, tkrX = 0, tkrCopyW = 0, tkrPrev = 0, tkrStart = 0;
+let tkrSpeed = 130, tkrSig = null, tkrTimer = null, tkrItemsCur = null, tkrUp = false;
+
+function tkrChip(c) {
+  const wrap = el('span', 'tk-chip ' + (c.t === 'score' ? 'score' : c.t === 'hot' ? 'hot' : 'line'));
+  const add = (cls, txt) => wrap.appendChild(el('span', cls, txt));
+  if (c.t === 'score') {
+    const side = (ab, runs) => {
+      const sd = el('span', 'sd');
+      sd.appendChild(el('span', 'tm', ab));
+      sd.appendChild(el('span', 'rn', String(runs)));
+      wrap.appendChild(sd);
+    };
+    side(c.away, c.ar); side(c.home, c.hr);
+    if (c.tag) add('tag', c.tag);
+  } else {
+    if (c.k) add('k', c.k);
+    add('tx', c.txt || '');
+  }
+  return wrap;
+}
+
+// One copy of the strip is the loop length. It's repeated until the whole thing is wider than two
+// screens, so the seam where it wraps is always off frame when it comes round.
+function tkrBuild(items) {
+  const track = $('tkrTrack');
+  if (!track) return;
+  const mk = () => {
+    const copy = el('span', 'tk-copy');
+    items.forEach(c => {
+      // a diamond starts a new game or a new line of his own; a hairline divides one game's parts
+      copy.appendChild(el('span', (c.t === 'score' || c.t === 'text') ? 'tk-sep' : 'tk-bar'));
+      copy.appendChild(tkrChip(c));
+    });
+    return copy;
+  };
+  track.innerHTML = '';
+  const first = mk();
+  track.appendChild(first);
+  tkrCopyW = Math.max(1, first.offsetWidth);
+  const copies = Math.min(40, Math.max(2, Math.ceil(3840 / tkrCopyW) + 1));
+  for (let i = 1; i < copies; i++) track.appendChild(mk());
+}
+
+function tkrStop() { cancelAnimationFrame(tkrRaf); tkrRaf = null; }
+
+function tkrRun() {
+  tkrStop();
+  tkrPrev = 0; tkrStart = 0;
+  const track = $('tkrTrack');
+  if (!track) return;
+  const step = ts => {
+    if (!tkrPrev) { tkrPrev = ts; tkrStart = ts; }
+    // capped: a Browser Source that got backgrounded stops getting frames, and an uncapped delta
+    // would teleport the strip half a screen the moment it comes back
+    const dt = Math.min(100, ts - tkrPrev);
+    tkrPrev = ts;
+    const k = Math.min(1, (ts - tkrStart) / TKR_RAMP_MS);
+    tkrX -= tkrSpeed * (k * k * (3 - 2 * k)) * dt / 1000;
+    if (tkrCopyW && -tkrX >= tkrCopyW) tkrX += tkrCopyW;   // seamless, the copies are identical
+    track.style.transform = `translateX(${tkrX.toFixed(2)}px)`;
+    tkrRaf = requestAnimationFrame(step);
+  };
+  tkrRaf = requestAnimationFrame(step);
+}
+
+// Back to the resting position off the right edge, with no transition — otherwise the trip home
+// is an animation straight across the front of the shot, left to right.
+function tkrHome() {
+  const bar = $('tkrBar'), trail = $('tkrTrail'), track = $('tkrTrack');
+  if (!bar) return;
+  bar.style.transition = 'none';
+  trail.style.transition = 'none';
+  bar.style.transform = 'translateX(1990px)';
+  trail.style.transform = 'translateX(320px)';
+  tkrX = 0;
+  if (track) track.style.transform = 'translateX(0)';
+  // Commit it. Without this the browser coalesces the jump home and the next move into one
+  // transition, and the bar slides in from wherever it happened to be instead of from off frame.
+  void bar.offsetWidth;
+  tkrUp = false;
+}
+
+// In: the bar runs to 10px off the left edge and stops there; the words leave later, travel longer
+// and settle a beat after it, which is the trail.
+function tkrGo() {
+  const bar = $('tkrBar'), trail = $('tkrTrail');
+  bar.style.transition = `transform ${TKR_IN_BAR}ms ${TKR_EASE_IN}`;
+  trail.style.transition = `transform ${TKR_IN_WORDS}ms ${TKR_EASE_IN} ${TKR_LAG}ms`;
+  bar.style.transform = 'translateX(0)';
+  trail.style.transform = 'translateX(0)';
+  tkrUp = true;
+}
+
+// Out: both go left together, words slightly ahead — the mirror of the trail on the way in.
+function tkrLeave() {
+  const bar = $('tkrBar'), trail = $('tkrTrail');
+  bar.style.transition = `transform ${TKR_OUT_MS}ms ${TKR_EASE_OUT}`;
+  trail.style.transition = `transform ${TKR_OUT_MS}ms ${TKR_EASE_OUT}`;
+  bar.style.transform = 'translateX(-1990px)';
+  trail.style.transform = 'translateX(-200px)';
+  tkrUp = false;
+}
+
+function renderTicker(t) {
+  const bar = $('tkrBar');
+  if (!bar) return;
+  // Height off the bottom and pace apply live and are deliberately NOT part of the signature:
+  // nudging either while the scroll is running shouldn't make the whole thing exit and come back.
+  if (t) {
+    if (t.bottom != null) bar.style.bottom = Math.max(0, Math.min(940, +t.bottom || 0)) + 'px';
+    if (t.speed) tkrSpeed = Math.max(20, Math.min(500, +t.speed));
+  }
+  const on = !!(t && t.on && Array.isArray(t.items) && t.items.length);
+  const sig = on ? JSON.stringify(t.items) : 'OFF';
+  if (sig === tkrSig) return;           // same words — never restart a scroll that's already running
+  tkrSig = sig;
+  clearTimeout(tkrTimer);
+
+  const enter = () => {
+    tkrItemsCur = t.items;
+    tkrBuild(t.items);
+    tkrHome();          // forces the reflow, so tkrGo() below animates from off frame
+    tkrGo();
+    tkrTimer = setTimeout(tkrRun, TKR_IN_MS);
+  };
+  const leave = after => {
+    tkrStop();
+    if (!tkrUp) { tkrHome(); if (after) after(); return; }
+    tkrLeave();
+    tkrTimer = setTimeout(() => { tkrHome(); if (after) after(); }, TKR_OUT_MS + 40);
+  };
+
+  if (!on) { tkrItemsCur = null; leave(null); return; }
+  // New words while one is already up: take the old strip out to the left first, so the swap reads
+  // as a deliberate change rather than the text jumping between frames.
+  if (tkrUp) leave(enter); else enter();
+}
+
+// Rift arrives after first paint, and a strip measured against the fallback loops at the wrong
+// width. Re-measure once the real font is in.
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { if (tkrItemsCur) tkrBuild(tkrItemsCur); });
+}
 
 function initTopicDisplay() {
   if (HUB) return initHubDisplay();
@@ -2033,7 +2331,7 @@ async function fetchTeamGroup(spec, year) {
     : spec.sit
       ? `${API}/teams/stats?season=${year}&group=${spec.group}&stats=statSplits&sitCodes=${spec.sit}&sportIds=1`
       : `${API}/teams/stats?season=${year}&group=${spec.group}&stats=season&sportIds=1`;
-  const d = await jc(url);
+  const d = await jc(url + gtParam());
   const sec = (d.stats || [])[0];
   return (sec && sec.splits) || [];
 }
@@ -2062,6 +2360,8 @@ async function buildTeamCardSet(teamId, teamName, year) {
     const splits = groups[gi];
     const mine = splits.find(sp => sp.team && sp.team.id === +teamId);
     if (!mine) return;
+    // not hard-coded to 30: in October only the clubs still playing appear, so "4th of 12" is the
+    // honest line and "4th of 30" would be a lie
     const total = splits.filter(sp => sp.team).length || 30;
     const cells = spec.cells.map(([label, field, dir]) => {
       const raw = mine.stat[field];
@@ -2073,8 +2373,8 @@ async function buildTeamCardSet(teamId, teamName, year) {
     // The crest identifies the club, so the headline is the category — it's the thing that changes
     // as the cycle runs, and it's what a host reading off the monitor needs to see.
     cards.push({ kind: 'team', id: +teamId, name: spec.label,
-                 sub: rangeActive() ? `${rangeLabel()} \u00b7 MLB RANK OF ${total}`
-                                    : `${year} \u00b7 MLB RANK OF ${total}`,
+                 sub: rangeActive() ? `${rangeLabel()} \u00b7 RANK OF ${total}`
+                                    : `${isPost() ? year + ' POSTSEASON' : year} \u00b7 RANK OF ${total}`,
                  label: '', hitLine: '', cells, specKey: spec.key, teamName });
   });
   return cards;
@@ -2439,11 +2739,224 @@ $('modalExitOnAir').onclick = () => {
   $('modalDlNote').textContent = 'Removed from OBS ✓';
 };
 
+// =====================================================================================
+// Bottom scroll — control side
+// =====================================================================================
+// Final and in-progress scores, both starting pitching lines, the two best nights of each game,
+// and any name worth knowing who did nothing. Plus whatever he types himself.
+
+// A box score is about 300KB. `fields` cuts it to 40, which is the difference between a full slate
+// costing 600KB and costing 5MB on studio wifi.
+const TK_BOX_FIELDS = ['teams','home','away','team','abbreviation','teamName','players','person',
+  'id','fullName','stats','batting','pitching','seasonStats','atBats','hits','homeRuns','rbi',
+  'runs','baseOnBalls','strikeOuts','doubles','triples','stolenBases','inningsPitched','earnedRuns',
+  'gamesStarted','note','battingOrder','pitchers','batters','ops','avg'].join(',');
+
+// Never cached: a game in progress is the one case where a stale answer is worse than no answer.
+// 15s rather than the transport's 6 — a full slate is sixteen of these at once.
+const tkFetch = url => fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+  .then(r => { if (!r.ok) throw new Error(url + ' -> ' + r.status); return r.json(); });
+
+function tkAbbr(t) {
+  if (!t) return '';
+  const known = teamsById.get(+t.id);
+  return String(t.abbreviation || (known && known.abbreviation)
+                || (t.teamName || t.name || '').slice(0, 3)).toUpperCase();
+}
+
+// "Someone a room would recognise." Deliberately generous on the OPS side: a .900 hitter going
+// 0-for-4 is a story whether or not he has thirty homers. The season line is already sitting in
+// the box score, so this costs nothing extra to ask.
+function tkNotable(ss) {
+  if (!ss) return false;
+  const hr = +ss.homeRuns || 0, ab = +ss.atBats || 0, ops = parseFloat(ss.ops) || 0;
+  return hr >= 25 || (ops >= 0.850 && ab >= 250) || (ops >= 0.800 && ab >= 400);
+}
+
+// hits and damage, weighted so a homer or a three-RBI night beats a quiet 2-for-5
+function tkBatScore(b) {
+  return (+b.hits || 0) + (+b.homeRuns || 0) * 2.5 + (+b.rbi || 0) * 1.2 + (+b.runs || 0) * 0.6
+       + (+b.doubles || 0) * 0.5 + (+b.triples || 0) * 0.8 + (+b.stolenBases || 0) * 0.5;
+}
+
+function tkPitchLine(p) {
+  const st = p.stats.pitching || {};
+  return `${p.person.fullName} ${st.inningsPitched || '0.0'} IP, ${+st.hits || 0} H, `
+       + `${+st.earnedRuns || 0} ER, ${+st.baseOnBalls || 0} BB, ${+st.strikeOuts || 0} K`;
+}
+
+function tkBatLine(p) {
+  const b = p.stats.batting || {};
+  const bits = [`${+b.hits || 0}-FOR-${+b.atBats || 0}`];
+  if (+b.homeRuns) bits.push(`${b.homeRuns} HR`);
+  else if (+b.triples) bits.push(`${b.triples} 3B`);
+  else if (+b.doubles) bits.push(`${b.doubles} 2B`);
+  if (+b.rbi) bits.push(`${b.rbi} RBI`);
+  if (+b.runs) bits.push(`${b.runs} R`);
+  if (+b.stolenBases) bits.push(`${b.stolenBases} SB`);
+  return `${p.person.fullName} ${bits.join(', ')}`;
+}
+
+function tkColdLine(p) {
+  const b = p.stats.batting || {};
+  const bits = [`0-FOR-${+b.atBats || 0}`];
+  if (+b.strikeOuts) bits.push(`${b.strikeOuts} K`);
+  return `${p.person.fullName} ${bits.join(', ')}`;
+}
+
+async function tkChipsForGame(g) {
+  const out = [];
+  const a = g.teams.away, h = g.teams.home, ls = g.linescore || {}, st = g.status || {};
+  const sched = +ls.scheduledInnings || 9;
+  const tag = st.abstractGameState === 'Final'
+    ? (+ls.currentInning > sched ? `FINAL/${ls.currentInning}` : 'FINAL')
+    : `${String(ls.inningState || '').slice(0, 3).toUpperCase()} ${ls.currentInning || ''}`.trim();
+  out.push({ t: 'score', away: tkAbbr(a.team), ar: +a.score || 0,
+             home: tkAbbr(h.team), hr: +h.score || 0, tag });
+
+  let box = null;
+  try { box = await tkFetch(`${API}/game/${g.gamePk}/boxscore?fields=${TK_BOX_FIELDS}`); } catch {}
+  if (!box || !box.teams) return out;      // one unreadable box score still leaves the score itself
+
+  const dec = g.decisions || {};
+  const winId = dec.winner && dec.winner.id, loseId = dec.loser && dec.loser.id;
+  const sides = ['away', 'home'];
+
+  // The starter is the FIRST name in the club's pitcher list — that list is the order the game was
+  // actually pitched in, so this is the starter rather than whoever happens to sort first.
+  sides.forEach(side => {
+    const T = box.teams[side];
+    if (!T || !T.pitchers || !T.pitchers.length) return;
+    const p = T.players['ID' + T.pitchers[0]];
+    if (!p || !p.stats || !p.stats.pitching) return;
+    const k = p.person.id === winId ? 'W' : p.person.id === loseId ? 'L' : 'SP';
+    out.push({ t: 'line', k, txt: tkPitchLine(p) });
+  });
+  if (dec.save) out.push({ t: 'line', k: 'SV', txt: dec.save.fullName });
+
+  const bats = [];
+  sides.forEach(side => {
+    const T = box.teams[side];
+    if (!T || !T.batters) return;
+    T.batters.forEach(pid => {
+      const p = T.players['ID' + pid];
+      if (p && p.stats && p.stats.batting && (+p.stats.batting.atBats || 0) > 0) bats.push(p);
+    });
+  });
+  // the two best nights across both clubs, and only if they were worth saying out loud
+  bats.slice().sort((x, y) => tkBatScore(y.stats.batting) - tkBatScore(x.stats.batting))
+      .filter(p => tkBatScore(p.stats.batting) >= 3).slice(0, 2)
+      .forEach(p => out.push({ t: 'line', k: '', txt: tkBatLine(p) }));
+  // then the other half of the story, inverted on screen: a name that matters, nothing to show
+  bats.filter(p => (+p.stats.batting.atBats || 0) >= 3 && !(+p.stats.batting.hits)
+                   && tkNotable((p.seasonStats || {}).batting))
+      .slice(0, 2)
+      .forEach(p => out.push({ t: 'hot', k: '', txt: tkColdLine(p) }));
+  return out;
+}
+
+async function tkLoadScores(dateIso, allowFallback) {
+  const note = $('tkNote');
+  const date = dateIso || $('tkDate').value || isoLocal(new Date());
+  $('tkDate').value = date;
+  note.textContent = 'Loading games…';
+  let d;
+  try {
+    d = await tkFetch(`${API}/schedule?sportId=1&date=${date}&hydrate=linescore,decisions,team`);
+  } catch { note.textContent = "Couldn't reach the schedule — try again."; return; }
+  const play = (((d.dates || [])[0] || {}).games || [])
+    .filter(g => g.gameType !== 'S' && g.gameType !== 'E')
+    .filter(g => {
+      const abs = (g.status || {}).abstractGameState;
+      return abs === 'Final' || abs === 'Live';
+    });
+  if (!play.length) {
+    // Before first pitch today has no scores, and last night's slate is what a show wants anyway.
+    // Only ever steps back one day, and the date box updates so it's visible rather than silent.
+    if (allowFallback) {
+      const y = new Date(date + 'T12:00:00');
+      y.setDate(y.getDate() - 1);
+      return tkLoadScores(isoLocal(y), false);
+    }
+    tkGames = []; tkRebuild();
+    note.textContent = `No games with a score on ${date}.`;
+    return;
+  }
+  note.textContent = `Reading ${play.length} box score${play.length === 1 ? '' : 's'}…`;
+  const per = await Promise.all(play.map(g => tkChipsForGame(g).catch(() => null)));
+  tkGames = per.filter(Boolean).reduce((acc, x) => acc.concat(x), []);
+  note.textContent = `${play.length} game${play.length === 1 ? '' : 's'} from ${date}`;
+  tkRebuild();
+}
+
+function tkRebuild() {
+  // His own lines run first — they're the ones he put there on purpose.
+  const own = String($('tkText').value || '').split('\n').map(x => x.trim()).filter(Boolean)
+    .map(txt => ({ t: 'text', txt }));
+  tkItems = $('tkUseScores').checked ? own.concat(tkGames) : own;
+  tkPaint();
+  if (tkOn) broadcast();
+}
+
+function tkPaint() {
+  const box = $('tkChips'); if (!box) return;
+  const chip = $('tkLiveChip');
+  const up = tkOn && !!tkItems.length;
+  chip.classList.toggle('on', up);
+  chip.textContent = up ? 'on air' : 'off';
+  box.innerHTML = '';
+  if (!tkItems.length) {
+    box.appendChild(el('span', 'tkp-empty', 'Nothing in the scroll yet — load a date, or type a line below.'));
+    return;
+  }
+  tkItems.forEach(c => {
+    const cls = 'tkp-chip' + (c.t === 'hot' ? ' hot' : c.t === 'score' ? ' score' : '');
+    box.appendChild(el('span', cls, c.t === 'score'
+      ? `${c.away} ${c.ar} – ${c.home} ${c.hr}  ${c.tag}`
+      : (c.k ? c.k + ' ' : '') + c.txt));
+  });
+}
+
+$('tkLoad').onclick = () => guard(tkLoadScores)('', true);
+$('tkIn').onclick = () => {
+  if (!tkItems.length) { $('tkNote').textContent = 'Nothing to scroll yet — load a date or type a line.'; return; }
+  tkOn = true; tkPaint(); broadcast();
+};
+$('tkOut').onclick = () => { tkOn = false; tkPaint(); broadcast(); };
+$('tkUseScores').onchange = tkRebuild;
+// Debounced. A rebuild republishes, and publishing on every keystroke is exactly the traffic that
+// gets a topic rate limited halfway through a show.
+let tkTextTimer = null;
+$('tkText').oninput = () => { clearTimeout(tkTextTimer); tkTextTimer = setTimeout(tkRebuild, 600); };
+// Pace and height are applied to a scroll that's already running rather than restarting it, so
+// these can be dialled in live without the strip ducking out and coming back.
+$('tkSpeed').onchange = () => {
+  tkSpeedV = Math.max(20, Math.min(500, +$('tkSpeed').value || 130));
+  $('tkSpeed').value = tkSpeedV;
+  if (tkOn) broadcast();
+};
+$('tkBottom').onchange = () => {
+  tkBottomV = Math.max(0, Math.min(940, +$('tkBottom').value || 100));
+  $('tkBottom').value = tkBottomV;
+  if (tkOn) broadcast();
+};
+
+// Regular season or postseason. Every cached URL was built for one or the other, so the cache goes.
+$('gameType').onchange = guard(async () => {
+  GT = $('gameType').value === 'P' ? 'P' : 'R';
+  jCache.clear();
+  if (isPost() && isPace(modalTf)) modalTf = 'season';   // no 162-game denominator in October
+  if (!$('modalBackdrop').hidden && modalPid) { paintTfPills(); await loadModalStats(); }
+  if (!$('teamModalBackdrop').hidden && teamModalId) await openTeamModal(teamModalId, teamSpecKey);
+});
+
 const yr = new Date().getFullYear();
 if (isDisplayMode) {
   initDisplay();
 } else {
   $('hubInput').value = HUB;
+  $('tkDate').value = isoLocal(new Date());
+  tkPaint();
   const stamp = $('buildStamp');
   if (stamp) stamp.textContent = document.lastModified || 'unknown';
   $('season').innerHTML = Array.from({length: yr - 2013}, (_, i) => yr - i).map(y => `<option>${y}</option>`).join('');
