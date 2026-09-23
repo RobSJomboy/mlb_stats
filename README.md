@@ -464,3 +464,8 @@ from the same machine each month, or the petals won't follow.
 - **The ticker payload is signed on its items alone.** Pace and height are applied live and left
   out of the signature on purpose — otherwise dialling in the speed mid-show would take the whole
   strip off and bring it back.
+- **ntfy turns any message over ~4KB into an attachment and answers 200.** Subscribers then get
+  `"You received a file: attachment.json"` where the payload should be, so nothing reports a
+  failure and the graphic just never changes. A full slate of scores is 6.5KB, which is how this
+  was found. Anything over 3.5KB now goes gzipped and base64'd as `{z:"…"}`; the display unwraps it
+  at the single point every transport funnels through. A doubled strip still packs to about 2.5KB.

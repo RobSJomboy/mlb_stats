@@ -1503,11 +1503,37 @@ function relayPost(payload) {
   }).then(r => setFeed(r.ok)).catch(() => setFeed(false));
 }
 
-// Fire-and-forget, same as the relay: if the topic is unreachable the show carries on and the
-// pill goes back to grey on the next publish rather than blocking on a dead network.
-function publishTopic(payload) {
-  if (!TOPIC) return;
-  const body = JSON.stringify(payload || { clear: true, ts: Date.now() });
+// ntfy turns any body over about 4KB into an ATTACHMENT and hands subscribers
+// "You received a file: attachment.json" where the message should be. It answers 200 and nothing
+// anywhere reports a failure — the graphic simply never updates. A full slate of scores is 6.5KB,
+// which is exactly how this was found. Gzipped that's 2.4KB, and the strip repeats itself enough
+// that twice the content only adds about a hundred bytes.
+const NTFY_SAFE_BYTES = 3500;
+
+async function packBody(body) {
+  if (typeof CompressionStream !== 'function') return null;
+  const cs = new CompressionStream('gzip');
+  const w = cs.writable.getWriter();
+  w.write(new TextEncoder().encode(body));
+  w.close();
+  const bytes = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return JSON.stringify({ z: btoa(bin), ts: Date.now() });
+}
+
+async function unpackBody(z) {
+  const bin = atob(z);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const ds = new DecompressionStream('gzip');
+  const w = ds.writable.getWriter();
+  w.write(bytes);
+  w.close();
+  return JSON.parse(await new Response(ds.readable).text());
+}
+
+function sendTopicBody(body) {
   if (HUB) {
     // Don't mark the connection dead when the relay fails — the fallback may well carry it, and a
     // red pill while you are actually on air is a false alarm that costs more than it saves.
@@ -1517,6 +1543,26 @@ function publishTopic(payload) {
     return;
   }
   ntfyPublish(body);
+}
+
+// Fire-and-forget, same as the relay: if the topic is unreachable the show carries on and the
+// pill goes back to grey on the next publish rather than blocking on a dead network.
+function publishTopic(payload) {
+  if (!TOPIC) return;
+  const body = JSON.stringify(payload || { clear: true, ts: Date.now() });
+  if (body.length <= NTFY_SAFE_BYTES) return sendTopicBody(body);
+  packBody(body).then(packed => {
+    if (packed && packed.length <= NTFY_SAFE_BYTES) return sendTopicBody(packed);
+    // Out of options. Say so, rather than publishing something that will arrive as a file and
+    // leave the display sitting on whatever was up before with no sign anything went wrong.
+    const hint = $('connHint');
+    if (hint) {
+      hint.textContent = 'This scroll is too long to fit through ntfy even compressed — shorten it, '
+        + 'or deploy the relay in relay/ and paste its URL above.';
+      hint.className = 'hint warn';
+    }
+    sendTopicBody(packed || body);
+  }).catch(() => sendTopicBody(body));
 }
 
 function ntfyPublish(body) {
@@ -1879,6 +1925,12 @@ let lastAppliedTs = 0;
 function renderOnAirBar(raw) {
   const bar = $('ltBar');
   if (!bar) return;
+  // A payload too big for an ntfy message arrives gzipped. Unwrap and come back round — every
+  // transport funnels through here, so this is the one place it has to be handled.
+  if (raw && typeof raw === 'object' && typeof raw.z === 'string') {
+    unpackBody(raw.z).then(p => renderOnAirBar(p)).catch(() => { /* not ours, or truncated */ });
+    return;
+  }
   // Several hosts feed this now, and a slow mirror can hand over an older payload after a newer
   // one has already landed — which would put a stale graphic back on screen. Timestamps only move
   // forward.
