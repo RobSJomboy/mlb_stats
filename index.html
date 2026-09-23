@@ -385,9 +385,9 @@
     /* coming on air it pushes up from below and settles; going off it drops back down. The ease
        is deliberately asymmetric — quick to leave the bottom, slow to settle. The slide is outside
        the scale, so it stays a 150px slide at any size. */
-    opacity:0;transform:translateY(150px) scale(var(--lt-scale,.5));
+    opacity:0;transform:translateY(150px) scale(var(--lt-scale,.33));
     transition:opacity .34s ease, transform .52s cubic-bezier(.16,.84,.32,1)}
-  .lt-bar.lt-visible{opacity:1;transform:translateY(0) scale(var(--lt-scale,.5))}
+  .lt-bar.lt-visible{opacity:1;transform:translateY(0) scale(var(--lt-scale,.33))}
 
   .lt-figure{flex:none;opacity:1;transition:opacity .22s ease}
   .lt-figure.swapping{opacity:0}
@@ -531,7 +531,7 @@
     <div><label for="rangeEnd">to (blank = today)</label><input id="rangeEnd" type="date"></div>
     <div><label>&nbsp;</label><button id="rangeClear" type="button">Clear Range</button></div>
     <div><label for="ltSize">Graphic size %</label>
-      <input id="ltSize" type="number" value="50" min="25" max="100" step="5" style="width:96px"></div>
+      <input id="ltSize" type="number" value="33" min="15" max="100" step="1" style="width:96px"></div>
     <div><label>Relay</label>
       <span class="feed" id="feedChip"><span class="feed-dot"></span><span id="feedText">Local only</span></span>
     </div>
@@ -1713,8 +1713,11 @@ let cycleSecs = 7;
 let tkOn = false, tkItems = [], tkGames = [], tkSpeedV = 130, tkBottomV = 100;
 // How big the stat bar is drawn, as a percentage of the size it was designed at. Kept on this
 // machine so it survives a reload — it's a look-of-the-show setting, not a per-graphic one.
-let barScale = 50;
-const BAR_SCALE_KEY = 'tb-bar-scale';
+let barScale = 33;
+// Key bumped with the default. The old one already holds 50 on any machine that loaded the
+// previous build, and a saved value beats a new default — so without this the change to a third
+// would simply never appear for the one person it was changed for.
+const BAR_SCALE_KEY = 'tb-bar-scale-v2';
 
 const cardFromData = (kind, id, name, sub, data) =>
   ({ kind, id, name, sub, label: data.label, hitLine: data.hitLine, cells: data.cells });
@@ -1912,7 +1915,7 @@ function payloadSig(p) {
 // Size is applied straight to the bar and deliberately kept OUT of the payload signature below:
 // dragging it while a graphic is live should resize what's on screen, not cross-fade it.
 function applyBarScale(pct) {
-  const n = Math.max(25, Math.min(100, +pct || 0));
+  const n = Math.max(15, Math.min(100, +pct || 0));
   if (!n) return;                 // absent from an older payload — leave the CSS default alone
   const bar = $('ltBar');
   if (bar) bar.style.setProperty('--lt-scale', (n / 100).toFixed(3));
@@ -2926,15 +2929,44 @@ $('playerCycle').onchange = () => autoPushOnAir();
 
 // One seconds box drives both cycles; a change re-publishes so a live rotation picks up the new
 // pace immediately rather than at whatever interval it was already running.
-function onCycleSecsChange(e) {
-  const v = Math.min(60, Math.max(2, +e.target.value || 7));
+// A number input's `change` event does not fire until the field is COMMITTED — blur or Enter.
+// Every numeric control here was wired to it alone, so typing a value and looking at the screen did
+// nothing whatsoever, which on air reads exactly as "the size box isn't working". They all take
+// effect as you type now.
+//
+// While the field still has focus the value is applied but deliberately NOT rewritten: a half-typed
+// "3" on the way to "33" is out of range, so it's ignored rather than clamped to the minimum and
+// snapping the graphic to it. The clamp and the write-back happen on commit.
+function numberField(id, min, max, fallback, apply) {
+  const node = $(id);
+  if (!node) return;
+  let timer = null;
+  node.oninput = () => {
+    const raw = parseFloat(node.value);
+    if (!Number.isFinite(raw) || raw < min || raw > max) return;   // mid-type; leave it alone
+    clearTimeout(timer);
+    // debounced, because applying republishes and a publish per keystroke is the traffic that
+    // gets a topic rate limited halfway through a show
+    timer = setTimeout(() => apply(raw), 300);
+  };
+  node.onchange = () => {
+    clearTimeout(timer);
+    const v = Math.max(min, Math.min(max, parseFloat(node.value) || fallback));
+    node.value = v;
+    apply(v);
+  };
+}
+
+// One pace drives both cycles. The box being typed in is left alone — mirroring the value back into
+// it mid-keystroke would fight whoever is typing.
+function setCycleSecs(v, srcId) {
   cycleSecs = v;
-  $('cycleSecs').value = v; $('teamCycleSecs').value = v;
-  if (onAirCycle) { broadcast(); }
+  ['cycleSecs', 'teamCycleSecs'].forEach(id => { if (id !== srcId) $(id).value = v; });
+  if (onAirCycle) broadcast();
   if (!$('teamModalBackdrop').hidden) pushTeamOnAir();
 }
-$('cycleSecs').onchange = onCycleSecsChange;
-$('teamCycleSecs').onchange = onCycleSecsChange;
+numberField('cycleSecs', 2, 60, 7, v => setCycleSecs(v, 'cycleSecs'));
+numberField('teamCycleSecs', 2, 60, 7, v => setCycleSecs(v, 'teamCycleSecs'));
 
 $('onairClear').onclick = clearOnAir;
 $('modalExitOnAir').onclick = () => {
@@ -3131,27 +3163,16 @@ $('tkUseScores').onchange = tkRebuild;
 // gets a topic rate limited halfway through a show.
 let tkTextTimer = null;
 $('tkText').oninput = () => { clearTimeout(tkTextTimer); tkTextTimer = setTimeout(tkRebuild, 600); };
-// Pace and height are applied to a scroll that's already running rather than restarting it, so
-// these can be dialled in live without the strip ducking out and coming back.
-$('tkSpeed').onchange = () => {
-  tkSpeedV = Math.max(20, Math.min(500, +$('tkSpeed').value || 130));
-  $('tkSpeed').value = tkSpeedV;
-  if (tkOn) broadcast();
-};
-// Applied to whatever is already on air rather than redrawing it, so this can be dialled in with
-// the graphic live and the numbers on screen just grow or shrink.
-$('ltSize').onchange = () => {
-  barScale = Math.max(25, Math.min(100, +$('ltSize').value || 50));
-  $('ltSize').value = barScale;
-  try { localStorage.setItem(BAR_SCALE_KEY, String(barScale)); } catch {}
+// Pace and height are applied to a scroll that's already running rather than restarting it, and
+// size to a graphic that's already on air rather than redrawing it — so all three can be dialled in
+// live, with the thing they're adjusting on screen the whole time.
+numberField('tkSpeed', 20, 500, 130, v => { tkSpeedV = v; if (tkOn) broadcast(); });
+numberField('tkBottom', 0, 940, 100, v => { tkBottomV = v; if (tkOn) broadcast(); });
+numberField('ltSize', 15, 100, 33, v => {
+  barScale = v;
+  try { localStorage.setItem(BAR_SCALE_KEY, String(v)); } catch {}
   broadcast();
-};
-
-$('tkBottom').onchange = () => {
-  tkBottomV = Math.max(0, Math.min(940, +$('tkBottom').value || 100));
-  $('tkBottom').value = tkBottomV;
-  if (tkOn) broadcast();
-};
+});
 
 // Regular season or postseason. Every cached URL was built for one or the other, so the cache goes.
 $('gameType').onchange = guard(async () => {
@@ -3167,7 +3188,7 @@ if (isDisplayMode) {
   initDisplay();
 } else {
   $('hubInput').value = HUB;
-  try { barScale = Math.max(25, Math.min(100, +localStorage.getItem(BAR_SCALE_KEY) || 50)); } catch {}
+  try { barScale = Math.max(15, Math.min(100, +localStorage.getItem(BAR_SCALE_KEY) || 33)); } catch {}
   $('ltSize').value = barScale;
   $('tkDate').value = isoLocal(new Date());
   tkPaint();

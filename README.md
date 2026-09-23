@@ -305,21 +305,28 @@ The rest of the bar is unaffected.
 
 ## Size
 
-**Graphic size %** in the top controls, default **50**. It scales the whole stat bar — box, crest,
+**Graphic size %** in the top controls, default **33**. It scales the whole stat bar — box, crest,
 name, numbers, ranks — as one piece, anchored bottom-left, so the left edge and the height off the
-floor stay where they were and only the footprint changes. At 50 the bar is 900x125 in a 1920x1080
+floor stay where they were and only the footprint changes. At 33 the bar is 594x83 in a 1920x1080
 frame instead of 1800x250.
 
 It's a single transform rather than every dimension being re-specified, which means the proportions
 stay exactly as drawn and `sizeCells()` goes on measuring the unscaled layout width — the stat
 columns still fill the bar the same way at any size.
 
-**The trade-off is the numbers.** At 50% a stat reads about 44px tall rather than 88. That's still a
-normal broadcast size, but it is half of what it was, so if a host is reading off a monitor across
-the room, push this back up — 65–70 is a good middle. It applies to whatever is already on air
-without redrawing it, so it can be dialled in live.
+**The trade-off is the numbers.** At 33% a stat reads about 29px tall rather than 88. That is small
+for a host reading off a monitor across a room — if that bites, push it back up; 50 is 44px and
+65–70 is comfortable. It applies to whatever is already on air without redrawing it, so it can be
+dialled in live with the graphic on screen.
 
-Saved per machine, so it survives a reload.
+Saved per machine, so it survives a reload. The storage key is versioned, because a saved value
+beats a new default and a changed default would otherwise never reach the person it was changed for.
+
+**Every numeric box here takes effect as you type.** They were wired to `change`, which on a number
+input doesn't fire until the field is committed with a blur or Enter — so typing a number and
+watching the screen did nothing, which reads exactly as "the size box isn't working". While a field
+still has focus a half-typed value that's out of range is ignored rather than clamped, so "3" on the
+way to "33" doesn't snap the graphic to the minimum first.
 
 ---
 
@@ -518,3 +525,8 @@ from the same machine each month, or the petals won't follow.
   scroll's pace and height are applied before the signature check, not signed. They were signed
   once, and the result was that nudging the scroll's height re-entered the render and cross-faded
   the stat block underneath it — a graphic blinking every time an unrelated slider moved.
+- **`change` on a number input is not "when the number changes".** It fires on commit — blur or
+  Enter — so a control wired to it alone does nothing while you type, and a value typed into a box
+  that is never left never applies at all. Use `input` (debounced, since applying republishes) and
+  keep `change` for the clamp and write-back. Testing this by calling the handler directly will
+  pass a completely broken control; it has to be tested by typing.
