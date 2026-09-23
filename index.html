@@ -759,11 +759,18 @@ const hubURL = room => `${HUB}/r/${encodeURIComponent(room)}`;
 const NET_TIMEOUT_MS = 6000;
 const tfetch = (url, opts) => fetch(url, { ...(opts || {}), signal: AbortSignal.timeout(NET_TIMEOUT_MS) });
 
+// ntfy.sh is deliberately LAST. It is the busiest public instance and the quickest to answer 429
+// for an address; listed first, the host most likely to be rate limited was also the host most
+// likely to be believed. Each of these was checked for a POST/poll round trip and for
+// `access-control-allow-origin: *`, without which a browser can't read the reply at all.
 const NTFY_HOSTS = (params.get('ntfy') ? [params.get('ntfy').replace(/\/$/, '')] : [
-  'https://ntfy.sh',
   'https://ntfy.envs.net',
   'https://ntfy.adminforge.de',
+  'https://ntfy.mzte.de',
+  'https://ntfy.hostux.net',
+  'https://ntfy.sh',
 ]);
+const NTFY_KEEPALIVE_MS = 45000;      // measured, not guessed: ntfy sends one every 45s
 const NTFY = NTFY_HOSTS[0];
 const TOPIC_KEY = 'tb-snapshot-topic';
 let TOPIC = params.get('topic') || '';
@@ -1603,12 +1610,21 @@ function publishTopic(payload) {
 function ntfyPublish(body) {
   // Green on the FIRST host that takes it. Waiting for every host to settle meant one dead host
   // held the verdict forever, so the pill sat red while the message was already on air.
-  let anyOk = false, settled = 0;
+  //
+  // A 429 is counted separately, because "too many requests from this address" and "this host is
+  // unreachable" are the same red pill and completely different problems: one you wait out or fix
+  // by deploying the relay, the other is the network.
+  let anyOk = false, settled = 0, limited = 0;
   NTFY_HOSTS.forEach(host => {
     tfetch(`${host}/${encodeURIComponent(TOPIC)}`, { method: 'POST', body })
-      .then(r => { if (r.ok && !anyOk) { anyOk = true; setConn(true, 'ntfy'); } })
+      .then(r => {
+        if (r.status === 429) limited++;
+        if (r.ok && !anyOk) { anyOk = true; setConn(true, 'ntfy'); }
+      })
       .catch(() => {})
-      .finally(() => { if (++settled === NTFY_HOSTS.length && !anyOk) setConn(false); });
+      .finally(() => {
+        if (++settled === NTFY_HOSTS.length && !anyOk) setConn(false, null, limited ? 'limited' : null);
+      });
   });
 }
 
@@ -1625,30 +1641,37 @@ function refreshObsPanel() {
   loadPreview();
 }
 
-function setConn(ok, via) {
+// `why` names the failure. 'limited' is every host answering 429 — too many requests from this
+// address — which is a completely different problem from the network being unreachable, and has a
+// completely different fix. 'pending' is the moment before anything has been tried, which used to
+// flash the full red warning on every page load.
+function setConn(ok, via, why) {
   const pill = $('connStatus'); if (!pill) return;
   topicOk = !!ok && !!TOPIC;
   refreshObsPanel();
   pill.classList.toggle('ok', !!ok);
   // naming the path that carried it makes a silent failover visible rather than a mystery
   pill.textContent = ok ? (via ? `connected · ${via}` : 'connected')
-                        : (TOPIC ? 'not reaching topic' : 'not connected');
+                        : !TOPIC ? 'not connected'
+                        : why === 'pending' ? 'connecting…'
+                        : why === 'limited' ? 'rate limited'
+                        : 'not reaching topic';
   $('copyDisplayBtn').disabled = !TOPIC;
   $('copyControlBtn').disabled = !TOPIC;
+  const hint = $('connHint');
+  if (!TOPIC || (TOPIC && ok) || why === 'pending') { updateConnHint(); return; }
   // A red pill on its own is easy to miss, and the consequence isn't obvious: OBS goes stale while
   // the control page keeps working, and "Open Display" keeps working too because same-browser tabs
-  // never touch the network. Say the actual consequence.
-  if (TOPIC && !ok) {
-    const hint = $('connHint');
-    hint.textContent = relayLive
-      ? "Can't reach ntfy.sh — OBS will NOT update over a topic. The local relay IS running: use the "
-        + 'OBS Browser Source URL below instead.'
-      : "Can't reach ntfy.sh — OBS will NOT update. Run trade_snapshot_server.py and use the relay URL "
-        + 'that appears here.';
-    hint.className = 'hint warn';
-  } else if (TOPIC && ok) {
-    updateConnHint();
-  }
+  // never touch the network. Say the actual consequence, and the actual fix.
+  const relayFix = relayLive
+    ? 'The local relay IS running: use the OBS Browser Source URL below instead.'
+    : 'The durable fix is your own relay: in the repo, run `npx wrangler login && npx wrangler deploy` '
+      + 'inside relay/, then paste the workers.dev URL into the Relay box above.';
+  hint.textContent = why === 'limited'
+    ? `Every ntfy host answered 429 — too many requests from this address, not an outage. `
+      + `OBS will NOT update until it clears. Wait a minute, or: ${relayFix}`
+    : `Can't reach any of the ${NTFY_HOSTS.length} ntfy hosts — OBS will NOT update. ${relayFix}`;
+  hint.className = 'hint warn';
 }
 
 function setFeed(live) {
@@ -2291,44 +2314,88 @@ function initTopicDisplay() {
     try { renderOnAirBar(JSON.parse(envelope.message)); } catch { /* malformed payload */ }
   };
 
-  // Each host gets its own stream, watchdog and poll. They all feed the same apply(), and the
-  // duplicate guard downstream means N hosts delivering the same message costs nothing.
-  NTFY_HOSTS.forEach(host => {
-    let es = null, lastMsgAt = Date.now(), sincePoll = Math.floor(Date.now() / 1000);
+  // One stream per host, with a slow poll behind ALL of them. They feed the same apply(), and the
+  // duplicate guard downstream means N hosts delivering one message costs nothing.
+  //
+  // What was wrong here, because it is easy to write again: liveness was taken from es.onmessage
+  // alone. ntfy proves a quiet stream is alive with a keepalive every 45s, but it arrives as a
+  // NAMED SSE event and onmessage only ever fires for `message` — so on a show where nobody touched
+  // a button, every stream looked dead after 20s and was torn down and reopened. Three hosts, a
+  // reopen every 20s, plus a poll every 10s each: roughly 27 requests a minute, forever, doing
+  // nothing, about 26,000 a day per Browser Source. That is what trips ntfy's rate limit, and once
+  // a host answers 429 nothing reaches the screen at all. The tool was manufacturing its own
+  // outage and then reporting it as "can't reach ntfy".
+  //
+  // So: keepalives count as proof of life, the watchdog sits past two of them, a failed stream
+  // backs off instead of being retried on a fixed tick, and the poll is a fallback for when the
+  // streams are genuinely down rather than a second engine running alongside them.
+  const STREAM_DEAD_MS = NTFY_KEEPALIVE_MS * 2 + 10000;   // 100s — a healthy quiet stream never trips it
+  const UNPROVEN_MS = 30000;                              // a stream that never said `open` isn't one
 
-    const bump = () => { lastMsgAt = Date.now(); };
-    const connect = () => {
-      if (es) es.close();
-      es = new EventSource(`${host}/${encodeURIComponent(TOPIC)}/sse`);
-      es.onmessage = ev => { bump(); try { apply(JSON.parse(ev.data)); } catch { /* ping */ } };
-      es.onerror = () => { /* browser auto-retries; the watchdog covers silent stalls */ };
+  // `alive` is the last time the host PROVED itself — an event, or a poll that really answered.
+  // `tried` is only when a socket was last opened. Keeping them apart matters: stamping `alive` at
+  // open time makes a host that never connects look healthy, which suppresses the fallback poll and
+  // leaves the backup with no backup.
+  const links = NTFY_HOSTS.map(host => ({ host, es: null, alive: 0, tried: 0, fails: 0, coolUntil: 0 }));
+  const proven = l => l.alive > 0 && Date.now() - l.alive < STREAM_DEAD_MS;
+  const anyAlive = () => links.some(proven);
+
+  const open = l => {
+    if (Date.now() < l.coolUntil) return;
+    try { if (l.es) l.es.close(); } catch {}
+    l.tried = Date.now();
+    try { l.es = new EventSource(`${l.host}/${encodeURIComponent(TOPIC)}/sse`); }
+    catch { l.es = null; return; }
+    // `open` and `keepalive` are ntfy's own proof the stream is up; `message` is the payload.
+    ['open', 'keepalive', 'poll_request'].forEach(ev =>
+      l.es.addEventListener(ev, () => { l.alive = Date.now(); l.fails = 0; }));
+    l.es.onmessage = ev => {
+      l.alive = Date.now(); l.fails = 0;
+      try { apply(JSON.parse(ev.data)); } catch { /* ping */ }
     };
-    connect();
-
-    // ntfy keepalives land at least every ~45s, so 20s of total silence means the stream is dead
-    // in a way the browser hasn't reported yet.
-    setInterval(() => {
-      if (Date.now() - lastMsgAt > 20000) { connect(); bump(); }
-    }, 5000);
-
-    const pollOnce = async (since) => {
-      const from = since != null ? since : sincePoll;
-      if (since == null) sincePoll = Math.floor(Date.now() / 1000);
-      try {
-        const res = await tfetch(`${host}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${from}`);
-        const text = await res.text();
-        bump();
-        text.split('\n').filter(Boolean).forEach(line => {
-          try { apply(JSON.parse(line)); } catch { /* malformed line */ }
-        });
-      } catch { /* this host is down; the others carry it */ }
+    // Close on error rather than leaving it open: EventSource retries on its own timetable too, and
+    // two reconnect engines under one watchdog is how the storm gets going.
+    l.es.onerror = () => {
+      try { l.es && l.es.close(); } catch {}
+      l.es = null;
+      l.fails++;
+      const back = Math.min(60000, 3000 * Math.pow(2, l.fails - 1));
+      l.coolUntil = Date.now() + back + Math.random() * 2000;   // jitter: don't retry in lockstep
     };
-    // SSE is the primary path; this only covers networks that buffer streaming connections.
-    setInterval(() => pollOnce(), 10000);
-    // Backfill on load: SSE only carries what's published from now on, so a Browser Source OBS
-    // just refreshed would sit blank until the next click.
-    pollOnce('10m');
-  });
+  };
+  links.forEach(open);
+  setInterval(() => links.forEach(l => {
+    // A stream that has proved itself gets until two keepalives are missed. One that never did gets
+    // a much shorter rope — a socket hanging in CONNECTING throws no error for a long time.
+    const stalled = l.alive ? Date.now() - l.alive > STREAM_DEAD_MS
+                            : Date.now() - l.tried > UNPROVEN_MS;
+    if (!l.es || l.es.readyState === 2 || stalled) open(l);
+  }), 20000);
+
+  // The poll has two jobs only: catch up a Browser Source OBS just refreshed, and carry the show if
+  // every stream is blocked. One host per tick, round-robin, so a quiet show costs two requests a
+  // minute across the whole pool instead of thirty.
+  let turn = 0, since = Math.floor(Date.now() / 1000);
+  const poll = async (l, from) => {
+    const f = from != null ? from : since;
+    if (from == null) since = Math.floor(Date.now() / 1000);
+    try {
+      const r = await tfetch(`${l.host}/${encodeURIComponent(TOPIC)}/json?poll=1&since=${f}`);
+      if (r.status === 429) { l.coolUntil = Date.now() + 120000; return; }   // sit out, don't hammer
+      if (!r.ok) return;                       // a 429 counted as proof of life is how the watchdog
+      l.alive = Date.now();                    // stayed quiet while nothing was getting through
+      (await r.text()).split('\n').filter(Boolean)
+        .forEach(line => { try { apply(JSON.parse(line)); } catch { /* malformed line */ } });
+    } catch { /* this host is down; the others carry it */ }
+  };
+  setInterval(() => {
+    if (anyAlive()) return;                    // the streams have it; stay off the wire
+    const l = links[turn++ % links.length];
+    if (Date.now() >= l.coolUntil) poll(l);
+  }, 30000);
+  // Backfill on boot, so a refreshed Browser Source gets the current graphic straight back. Spread
+  // out, so five hosts aren't hit in the same instant.
+  links.forEach((l, i) => setTimeout(() => poll(l, '10m'), i * 400));
 }
 
 // WebSocket to your relay, with a slow poll behind it in case a network eats the upgrade.
@@ -3214,7 +3281,7 @@ if (isDisplayMode) {
   if (startTopic) {
     TOPIC = startTopic;
     try { localStorage.setItem(TOPIC_KEY, TOPIC); } catch {}   // so this machine remembers it too
-    setConn(false);        // provisional until a publish confirms; keeps the relay fallback visible
+    setConn(false, null, 'pending');   // nothing has been tried yet; the publish below decides
     publishTopic(null);
   } else {
     TOPIC = '';

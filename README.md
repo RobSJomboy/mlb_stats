@@ -530,3 +530,44 @@ from the same machine each month, or the petals won't follow.
   that is never left never applies at all. Use `input` (debounced, since applying republishes) and
   keep `change` for the clamp and write-back. Testing this by calling the handler directly will
   pass a completely broken control; it has to be tested by typing.
+
+## Rate limiting is the failure to expect, not downtime
+
+`Can't reach ntfy.sh` almost always means **429 — too many requests from this address**, and for a
+long time this tool was generating that itself.
+
+The output held one SSE stream per host **and** polled every host every 10 seconds on top of it.
+Measured side by side against the fixed build, idle, doing nothing, nobody touching a button:
+
+| | requests/min idle |
+|---|---|
+| old (3 hosts, 10s poll each) | **17.8** |
+| fixed (5 hosts, poll only as fallback) | **1.5**, and those are the one-time boot backfill |
+
+17.8/min is about 25,000 requests a day per Browser Source. That is what earns the 429, and once a
+host answers 429 nothing reaches the screen at all — so the tool caused the outage and then
+reported it as "can't reach ntfy".
+
+Three separate faults, all of which are easy to write again:
+
+- **ntfy proves a quiet stream is alive with a keepalive every 45s, and it arrives as a *named* SSE
+  event.** `es.onmessage` only ever fires for `message`, so watching it alone makes a healthy quiet
+  stream look dead. The watchdog is 100s now and listens for `keepalive` and `open` as well. A 20s
+  watchdog tears down and reopens every stream three times a minute forever.
+- **The poll was masking the storm rather than preventing it** — it stamped liveness after every
+  fetch, 429s included, so the watchdog never fired while polls "succeeded". It now checks the
+  status, and a 429 puts that host in a two-minute cooldown instead of being retried.
+- **Never let two reconnect engines run at once.** `EventSource` retries on its own timetable, which
+  can't be read or changed from JS, so leaving a failed stream open *and* reopening it from a
+  watchdog gives you both. Close on error, then back off 3s→60s with jitter.
+
+The poll now runs only when every stream is down, one host per tick, round-robin.
+
+**Five hosts, and ntfy.sh is deliberately last.** It is the busiest instance and the quickest to
+rate limit an address; listed first, the host most likely to be 429 was also the host most likely to
+be believed. The pill now says **rate limited** rather than "not reaching topic" — same red light,
+completely different problem and completely different fix.
+
+**The durable fix is your own relay.** `relay/` holds a Cloudflare Worker, free plan, no card:
+`npx wrangler login && npx wrangler deploy`, then paste the `https://….workers.dev` URL into the
+Relay box. It rides along in the copied links, so the OBS machine inherits it.
