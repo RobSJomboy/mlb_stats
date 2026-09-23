@@ -218,6 +218,11 @@
     border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px}
   .sx-logo{width:38px;height:38px;object-fit:contain;flex:none;background:#f5f7fa;
     border-radius:50%;padding:4px}
+  /* same disc as .sx-logo, for a playoff opponent nobody knows yet */
+  .sx-tbd{width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;border:1px dashed rgba(251,204,122,.5);background:rgba(255,255,255,.05);
+    color:var(--gold);font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;
+    box-sizing:border-box}
   .sx-opp{font-family:var(--font-display);font-size:19px;letter-spacing:.04em;color:var(--white);line-height:1}
   .sx-games{font-family:var(--font-mono);font-size:12px;color:var(--gold);margin-top:5px;letter-spacing:.1em}
   .sx-date{font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.1em}
@@ -426,6 +431,27 @@
     color:#ffffff;letter-spacing:.02em;white-space:nowrap;margin-top:9px}
   .lt-cell .d{font-family:'DM Mono',monospace;font-weight:400;font-size:14px;
     color:rgba(255,255,255,.62);letter-spacing:.12em;white-space:nowrap;margin-top:6px}
+
+  /* one upcoming game: crest, when, and whoever is announced to pitch it */
+  .lt-cell.game{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .game-logo{width:72px;height:72px;object-fit:contain;background:#f5f7fa;border-radius:50%;
+    padding:7px;display:block;box-sizing:border-box}
+  /* A playoff opponent that hasn't been decided yet comes back as a placeholder club with no
+     crest to load. A dashed disc says "not known yet"; an invisible broken image says nothing. */
+  .game-tbd{width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.07);
+    border:2px dashed rgba(251,204,122,.5);display:flex;align-items:center;justify-content:center;
+    font-family:'DM Mono',monospace;font-size:15px;letter-spacing:.1em;color:#fbcc7a;
+    box-sizing:border-box}
+  .game-when{font-family:'DM Mono',monospace;font-weight:400;font-size:15px;
+    color:rgba(255,255,255,.62);letter-spacing:.11em;white-space:nowrap;margin-top:8px;
+    overflow:hidden}
+  .game-sp{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:34px;line-height:1;
+    color:#ffffff;letter-spacing:.02em;white-space:nowrap;margin-top:9px;overflow:hidden;
+    text-transform:uppercase}
+  .game-opp{font-family:'DM Mono',monospace;font-weight:500;font-size:17px;color:#fbcc7a;
+    letter-spacing:.09em;white-space:nowrap;margin-top:6px;overflow:hidden;
+    text-transform:uppercase}
+  .game-opp:empty{display:none}
   /* ---- bottom scroll -----------------------------------------------------------------------
      White card, blue rule, Rift caps. It arrives as one piece from the right: the bar eases in
      until its left edge sits 10px off frame and stops there, and the words - on their own slightly
@@ -1876,15 +1902,28 @@ function paintCard(card) {
   const splitText = card.label ? card.label.toUpperCase() : '';
   const subText = card.hitLine ? card.hitLine.toUpperCase() : '';
   hitEl.innerHTML = splitText ? `<span class="split">${splitText}</span>${subText ? '  \u00b7  ' + subText : ''}` : '';
-  if (card.series && card.series.length) {
+  if (card.games && card.games.length) {
+    // crest, when, then whoever is announced to pitch it — the pitcher is the headline, so it's
+    // the biggest thing in the cell
+    $('ltCells').innerHTML = card.games.map(gx =>
+      `<div class="lt-cell game">` +
+      `<div class="sched-side">${gx.home ? 'VS' : 'AT'}</div>` +
+      (gx.tbd ? `<div class="game-tbd">TBD</div>`
+              : `<img class="game-logo" src="${logoURL(gx.oppId)}" alt="${gx.oppName}" ` +
+                `onerror="this.style.visibility='hidden'">`) +
+      `<div class="game-when">${[seriesDates(gx.date, gx.date), gx.round].filter(Boolean).join('  \u00b7  ')}</div>` +
+      `<div class="game-sp">${gx.sp || 'TBA'}</div>` +
+      `<div class="game-opp">${gx.oppSp ? 'VS ' + gx.oppSp : ''}</div></div>`).join('');
+  } else if (card.series && card.series.length) {
     // crest, then the game count, then the date smallest underneath
     $('ltCells').innerHTML = card.series.map(sx =>
       `<div class="lt-cell sched">` +
       `<div class="sched-side">${sx.home ? 'VS' : 'AT'}</div>` +
-      `<img class="sched-logo" src="${logoURL(sx.oppId)}" alt="${sx.oppName}" ` +
-      `onerror="this.style.visibility='hidden'">` +
+      (sx.tbd ? `<div class="game-tbd" style="width:104px;height:104px;font-size:19px">TBD</div>`
+              : `<img class="sched-logo" src="${logoURL(sx.oppId)}" alt="${sx.oppName}" ` +
+                `onerror="this.style.visibility='hidden'">`) +
       `<div class="g">${sx.games} GAME${sx.games === 1 ? '' : 'S'}</div>` +
-      `<div class="d">${sx.dates}</div></div>`).join('');
+      `<div class="d">${[sx.dates, sx.round].filter(Boolean).join('  \u00b7  ')}</div></div>`).join('');
   } else {
     // cells are [statLabel, value] or [statLabel, value, rankText]
     $('ltCells').innerHTML = (card.cells || []).map(([label, value, rank]) =>
@@ -1985,10 +2024,20 @@ function sizeCells() {
   if (!wrap) return;
   const cells = [...wrap.querySelectorAll('.lt-cell')];
   if (!cells.length) return;
-  // schedule cells are a fixed lockup (crest + count + date); only stat cells get scaled
-  if (cells[0].classList.contains('sched')) {
-    const w = Math.max(200, Math.min(400, Math.floor(wrap.clientWidth / cells.length)));
-    cells.forEach(c => { c.style.width = w + 'px'; });
+  // schedule and game cells are fixed lockups, not stat columns — they only get a width, plus a
+  // shrink-to-fit on the pitcher names, which run much longer than a stat value ever does
+  if (cells[0].classList.contains('sched') || cells[0].classList.contains('game')) {
+    const w = Math.max(200, Math.min(440, Math.floor(wrap.clientWidth / cells.length)));
+    cells.forEach(c => {
+      c.style.width = w + 'px';
+      [['.game-sp', 34, 18], ['.game-opp', 17, 11], ['.game-when', 15, 10]].forEach(([sel, top, min]) => {
+        const n = c.querySelector(sel);
+        if (!n || !n.textContent) return;
+        let fs = top;
+        n.style.fontSize = fs + 'px';
+        while (fs > min && n.scrollWidth > w - 12) { fs -= 1; n.style.fontSize = fs + 'px'; }
+      });
+    });
     return;
   }
   const n = cells.length;
@@ -2465,6 +2514,7 @@ async function buildScheduleCard(teamId, teamName, year) {
     const isHome = home.id === +teamId;
     const opp = isHome ? away : home;
     games.push({ date, oppId: opp.id, oppName: opp.name, isHome,
+                 tbd: isPlaceholderClub(opp.id), round: roundLabel(g, false),
                  inSeries: +g.gamesInSeries || 0 });
   }));
   games.sort((a, b) => a.date.localeCompare(b.date));
@@ -2476,19 +2526,76 @@ async function buildScheduleCard(teamId, teamName, year) {
       last.end = g.date; last.count++;
       last.inSeries = Math.max(last.inSeries, g.inSeries);
     } else {
-      runs.push({ oppId: g.oppId, oppName: g.oppName, isHome: g.isHome,
+      runs.push({ oppId: g.oppId, oppName: g.oppName, isHome: g.isHome, tbd: g.tbd, round: g.round,
                   start: g.date, end: g.date, count: 1, inSeries: g.inSeries });
     }
   });
 
   const series = runs.slice(0, 3).map(r => ({
-    oppId: r.oppId, oppName: r.oppName, home: r.isHome,
+    oppId: r.oppId, oppName: r.oppName, home: r.isHome, tbd: r.tbd, round: r.round,
     games: r.inSeries || r.count,
     dates: seriesDates(r.start, r.end),
   }));
   if (!series.length) return null;
   return { kind: 'team', id: +teamId, name: 'NEXT 3 SERIES', sub: `${year} SCHEDULE`,
            label: '', hitLine: '', cells: [], series, specKey: 'sched', teamName };
+}
+
+// ---- next games, and who is announced to pitch them -------------------------------------------
+// Probables only go up a day or two ahead — checked across several clubs, game one and two carry
+// names and everything past that is null. So this is a per-GAME card rather than pitchers bolted
+// onto the series card, which would have been three quarters empty.
+//
+// It earns its keep in October: the postseason bracket is published well before the field is set,
+// so a club's next three games become its wild card series, and the probables appear on top of the
+// round as they're announced.
+
+// The 30 clubs are the ones in teamsById. A playoff opponent still to be decided comes back as a
+// placeholder — "AL Wild Card #2", id 4944 — with an id that isn't one of them and no crest.
+const isPlaceholderClub = id => !teamsById.has(+id);
+
+const ROUND_SHORT = { F: 'WILD CARD', D: 'DIVISION SERIES', L: 'LCS', W: 'WORLD SERIES' };
+
+// withGame only on a per-game card. On the series card the run covers games 1 through 3, so
+// stamping it "G1" off the first game in the run would be wrong.
+function roundLabel(g, withGame) {
+  if (g.gameType === 'R') return '';                     // seriesDescription is just "Regular Season"
+  const short = ROUND_SHORT[g.gameType] || String(g.seriesDescription || '').toUpperCase();
+  const n = +g.seriesGameNumber;
+  return (withGame && n) ? `${short} G${n}` : short;   // the date already carries a dot before this
+}
+
+// Uncached on purpose: a probable can be announced in the middle of the afternoon, and this is the
+// one card where yesterday's answer is worse than no answer.
+async function buildGamesCard(teamId, teamName, year) {
+  const from = new Date(), to = new Date();
+  to.setDate(to.getDate() + 45);
+  const d = await j(`${API}/schedule?sportId=1&teamId=${teamId}` +
+                    `&startDate=${isoLocal(from)}&endDate=${isoLocal(to)}` +
+                    `&hydrate=probablePitcher,team`);
+  const todayIso = isoLocal(from);
+  const games = [];
+  (d.dates || []).forEach(day => (day.games || []).forEach(g => {
+    if (g.gameType === 'S' || g.gameType === 'E' || g.gameType === 'A') return;
+    const date = (g.officialDate || g.gameDate || '').slice(0, 10);
+    if (!date || date < todayIso) return;
+    const isHome = g.teams.home.team.id === +teamId;
+    const mine = isHome ? g.teams.home : g.teams.away;
+    const opp = isHome ? g.teams.away : g.teams.home;
+    games.push({
+      date, home: isHome,
+      oppId: opp.team.id, oppName: opp.team.name,
+      tbd: isPlaceholderClub(opp.team.id),
+      round: roundLabel(g, true),
+      sp: (mine.probablePitcher || {}).fullName || '',
+      oppSp: (opp.probablePitcher || {}).fullName || '',
+    });
+  }));
+  games.sort((a, b) => a.date.localeCompare(b.date));
+  const next = games.slice(0, 3);
+  if (!next.length) return null;
+  return { kind: 'team', id: +teamId, name: 'NEXT 3 GAMES', sub: `${year} \u00b7 PROBABLE STARTERS`,
+           label: '', hitLine: '', cells: [], games: next, specKey: 'games', teamName };
 }
 
 // =====================================================================================
@@ -2515,10 +2622,12 @@ async function openTeamModal(teamId, wantSpec) {
   $('modalBackdrop').hidden = true;
   $('teamModalBackdrop').hidden = false;
 
-  const [cards, schedCard] = await Promise.all([
+  const [cards, gamesCard, schedCard] = await Promise.all([
     buildTeamCardSet(teamId, team.name, year),
+    buildGamesCard(teamId, team.name, year).catch(() => null),
     buildScheduleCard(teamId, team.name, year).catch(() => null),
   ]);
+  if (gamesCard) cards.push(gamesCard);
   if (schedCard) cards.push(schedCard);
   if (teamModalId !== +teamId) return;          // switched teams while loading
   teamCards = cards;
@@ -2545,13 +2654,25 @@ function paintTeamPills() {
 function paintTeamBody() {
   const card = teamCards.find(c => c.specKey === teamSpecKey);
   if (!card) { $('teamModalBody').innerHTML = '<div class="modal-empty">No stats in this category.</div>'; return; }
+  const crest = (id, tbd) => tbd
+    ? `<div class="sx-logo sx-tbd">TBD</div>`
+    : `<img class="sx-logo" src="${logoURL(id)}" alt="" onerror="this.remove()">`;
+  if (card.games) {
+    const rows = card.games.map(gx =>
+      `<div class="sx-row">` + crest(gx.oppId, gx.tbd) +
+      `<div class="sx-meta"><div class="sx-opp">${gx.home ? 'vs' : 'at'} ${gx.oppName}</div>` +
+      `<div class="sx-games">${gx.sp || 'TBA'}${gx.oppSp ? '  vs  ' + gx.oppSp : ''}</div>` +
+      `<div class="sx-date">${[seriesDates(gx.date, gx.date), gx.round].filter(Boolean).join(' \u00b7 ')}</div>` +
+      `</div></div>`).join('');
+    $('teamModalBody').innerHTML = `<div class="modal-section"><h3>${card.name}</h3>${rows}</div>`;
+    return;
+  }
   if (card.series) {
     const rows = card.series.map(sx =>
-      `<div class="sx-row">` +
-      `<img class="sx-logo" src="${logoURL(sx.oppId)}" alt="" onerror="this.remove()">` +
+      `<div class="sx-row">` + crest(sx.oppId, sx.tbd) +
       `<div class="sx-meta"><div class="sx-opp">${sx.home ? 'vs' : 'at'} ${sx.oppName}</div>` +
       `<div class="sx-games">${sx.games} game${sx.games === 1 ? '' : 's'}</div>` +
-      `<div class="sx-date">${sx.dates}</div></div></div>`).join('');
+      `<div class="sx-date">${[sx.dates, sx.round].filter(Boolean).join(' \u00b7 ')}</div></div></div>`).join('');
     $('teamModalBody').innerHTML = `<div class="modal-section"><h3>${card.name}</h3>${rows}</div>`;
     return;
   }

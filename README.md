@@ -303,6 +303,27 @@ The rest of the bar is unaffected.
 
 ---
 
+## Next 3 Games — probable starters
+
+A card beside **Next 3 Series**: the club's next three games, each with the crest, when it is, and
+**who is announced to pitch it** — your starter big, the opposing starter underneath. Not yet
+announced reads **TBA**, which is the honest answer rather than a blank.
+
+**Probables only go up a day or two ahead.** That was checked across several clubs: game one and
+two carry names and everything past that comes back null. That's why this is a per-game card
+instead of pitchers bolted onto the series card, which would have been three quarters empty.
+
+**It's built for October.** The postseason bracket is published well before the field is set, so a
+club's next three games become its wild card series as soon as the regular season runs out, and the
+card labels the round — `SEP 29 · WILD CARD G1`. An opponent still to be decided comes back from the
+API as a placeholder club (`AL Wild Card #2`, id 4944) with no crest to load; both this card and the
+series card now draw a dashed **TBD** disc for those instead of an invisible broken image.
+
+There is no feed anywhere for a club's *projected* playoff rotation — nobody publishes that. This is
+who MLB has actually announced, which is the only version that can be stood behind on air.
+
+---
+
 ## The bottom scroll
 
 A white ticker across the bottom, in Rift caps, `#09334f` on white with a blue rule. Its own
@@ -469,3 +490,7 @@ from the same machine each month, or the petals won't follow.
   failure and the graphic just never changes. A full slate of scores is 6.5KB, which is how this
   was found. Anything over 3.5KB now goes gzipped and base64'd as `{z:"…"}`; the display unwraps it
   at the single point every transport funnels through. A doubled strip still packs to about 2.5KB.
+- **A playoff opponent that isn't decided yet is a real team object with a fake id.** `AL Wild Card
+  #2` comes back as id 4944 with a name and an abbreviation, so nothing about the response says
+  "placeholder" — but `logoURL` 404s on it. The test used here is membership of `teamsById`, which
+  holds exactly the 30 clubs.
