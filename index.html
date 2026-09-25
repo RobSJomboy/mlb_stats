@@ -379,9 +379,10 @@
     /* The whole lockup is scaled rather than every dimension inside it being re-specified: one
        number keeps the proportions the design was drawn at, and sizeCells() goes on measuring the
        unscaled layout width so the stat columns still fill the bar exactly as before. Anchored
-       bottom-left, so shrinking it leaves the left edge and the height off the floor where they
-       were rather than sliding the graphic around the frame. */
-    transform-origin:left bottom;
+       bottom-CENTRE: the layout box is 1800 wide inside a 1920 frame, 60px either side, so scaling
+       about its own centre leaves it centred in the shot at any size. Anchored bottom-left instead,
+       it stayed pinned to one side and shrank away from the middle. */
+    transform-origin:center bottom;
     /* coming on air it pushes up from below and settles; going off it drops back down. The ease
        is deliberately asymmetric — quick to leave the bottom, slow to settle. The slide is outside
        the scale, so it stays a 150px slide at any size. */
@@ -2509,29 +2510,92 @@ async function downloadGraphic(kind) {  // kind: 'bat' | 'pit'
 // dir: +1 means a bigger number is better, -1 means smaller is better. It has to be per-category,
 // not per-field: `strikeOuts` is good for a pitching staff and bad for a lineup, and `avg` is the
 // batting average in a hitting split but the average AGAINST in a pitching one.
-const TEAM_SPECS = [
-  { key: 'batting', label: 'TEAM BATTING', group: 'hitting', sit: null,
-    cells: [['AVG','avg',1], ['OBP','obp',1], ['SLG','slg',1], ['OPS','ops',1], ['R','runs',1], ['HR','homeRuns',1]] },
-  { key: 'sp', label: 'STARTING PITCHING', group: 'pitching', sit: 'sp',
-    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['BAA','avg',-1], ['IP','inningsPitched',1]] },
-  { key: 'rp', label: 'RELIEF PITCHING', group: 'pitching', sit: 'rp',
-    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['SV','saves',1], ['K','strikeOuts',1], ['BAA','avg',-1]] },
-  { key: 'def', label: 'TEAM DEFENSE', group: 'fielding', sit: null,
-    cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1], ['CS%','caughtStealingPercentage',1]] },
-];
+// Several of the numbers worth showing in October are rates the API only hands back as raw counts —
+// K%, BB%, BB/K, ISO. A cell's source can therefore be a FUNCTION of the split's stat line instead
+// of a field name, and the ranking runs on whatever that returns, so a computed stat is ranked
+// across all 30 clubs exactly like a native one.
+const statGet = src => (typeof src === 'function' ? src : (st => st[src]));
 
-// Over a custom window the starter/reliever split is unavailable — the API accepts sitCodes
-// alongside byDateRange and then ignores them, handing back the whole staff. Rather than label
-// undifferentiated numbers "STARTING PITCHING", the two categories collapse into one honest
-// PITCHING STAFF card whenever a range is active.
-const TEAM_SPECS_RANGE = [
-  { key: 'batting', label: 'TEAM BATTING', group: 'hitting', sit: null,
-    cells: [['AVG','avg',1], ['OBP','obp',1], ['SLG','slg',1], ['OPS','ops',1], ['R','runs',1], ['HR','homeRuns',1]] },
-  { key: 'staff', label: 'PITCHING STAFF', group: 'pitching', sit: null,
-    cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['BAA','avg',-1], ['IP','inningsPitched',1]] },
-  { key: 'def', label: 'TEAM DEFENSE', group: 'fielding', sit: null,
-    cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1], ['CS%','caughtStealingPercentage',1]] },
-];
+const rateOf = (n, d) => { const a = +n, b = +d; return b ? (a / b) * 100 : null; };
+const pct1 = v => v.toFixed(1) + '%';
+const ratio2 = v => v.toFixed(2);
+const lead0 = v => v.toFixed(3).replace(/^0\./, '.');      // .148, the way a slash line is written
+const kPctOf = st => rateOf(st.strikeOuts, st.plateAppearances);
+const bbPctOf = st => rateOf(st.baseOnBalls, st.plateAppearances);
+const bbPerK = st => (+st.strikeOuts ? +st.baseOnBalls / +st.strikeOuts : null);
+// isolated power: slugging minus average, i.e. extra bases per at-bat, which separates a club that
+// actually drives the ball from one piling up singles
+const isoOf = st => {
+  const sl = parseFloat(st.slg), av = parseFloat(st.avg);
+  return Number.isFinite(sl) && Number.isFinite(av) ? sl - av : null;
+};
+
+// Categories, in the order they cycle. Each is one request returning all 30 clubs, so the rank
+// under every number is computed here rather than trusted to a sortStat parameter.
+//
+// `dir` is which way is good: 1 = higher, -1 = lower. Getting it wrong is silent and produces a
+// confidently wrong "1st of 30", so every lower-is-better stat below is marked explicitly.
+const SPEC_BATTING = { key: 'batting', label: 'TEAM BATTING', group: 'hitting', sit: null,
+  cells: [['AVG','avg',1], ['OBP','obp',1], ['SLG','slg',1], ['OPS','ops',1],
+          ['R','runs',1], ['HR','homeRuns',1]] };
+
+// The October stat. How a club hits with a runner on second or third is the difference between a
+// rally and a stranded inning, and it is the first thing anyone reaches for in a playoff broadcast.
+const SPEC_RISP = { key: 'risp', label: 'WITH RISP', group: 'hitting', sit: 'risp',
+  // No LOB here on purpose. Left-on-base with RISP has no agreed direction: a low number can mean
+  // a club cashes its runners in, or that it never gets any on. Ranking it would have produced a
+  // confident "3rd of 30" that reads as praise for a team 19th in RISP average.
+  cells: [['AVG','avg',1], ['OPS','ops',1], ['HR','homeRuns',1], ['RBI','rbi',1],
+          ['K%', kPctOf, -1, pct1], ['BB%', bbPctOf, 1, pct1]] };
+
+// The same question asked of the pitching staff: what do they give up once runners are on.
+const SPEC_RISP_ARM = { key: 'risparm', label: 'OPPONENTS W/ RISP', group: 'pitching', sit: 'risp',
+  cells: [['BAA','avg',-1], ['OPS','ops',-1], ['K','strikeOuts',1],
+          ['K/9','strikeoutsPer9Inn',1], ['WHIP','whip',-1], ['HR','homeRuns',-1]] };
+
+const SPEC_DISC = { key: 'disc', label: 'PLATE DISCIPLINE', group: 'hitting', sit: null,
+  cells: [['K%', kPctOf, -1, pct1], ['BB%', bbPctOf, 1, pct1], ['BB/K', bbPerK, 1, ratio2],
+          ['SO','strikeOuts',-1], ['BB','baseOnBalls',1], ['GIDP','groundIntoDoublePlay',-1]] };
+
+const SPEC_POWER = { key: 'power', label: 'POWER & SPEED', group: 'hitting', sit: null,
+  cells: [['HR','homeRuns',1], ['ISO', isoOf, 1, lead0], ['SLG','slg',1],
+          ['AB/HR','atBatsPerHomeRun',-1], ['SB','stolenBases',1], ['SB%','stolenBasePercentage',1]] };
+
+const SPEC_SP = { key: 'sp', label: 'STARTING PITCHING', group: 'pitching', sit: 'sp',
+  cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['BAA','avg',-1],
+          ['IP','inningsPitched',1]] };
+
+const SPEC_RP = { key: 'rp', label: 'RELIEF PITCHING', group: 'pitching', sit: 'rp',
+  cells: [['ERA','era',-1], ['WHIP','whip',-1], ['SV','saves',1], ['K','strikeOuts',1],
+          ['BAA','avg',-1]] };
+
+// The whole staff together, which is where the club's strikeout total actually lives — the SP and
+// RP cards only ever show half of it each.
+const SPEC_STAFF = { key: 'staff', label: 'PITCHING STAFF', group: 'pitching', sit: null,
+  cells: [['ERA','era',-1], ['WHIP','whip',-1], ['K','strikeOuts',1], ['K/9','strikeoutsPer9Inn',1],
+          ['K/BB','strikeoutWalkRatio',1], ['BAA','avg',-1]] };
+
+const SPEC_DEF = { key: 'def', label: 'TEAM DEFENSE', group: 'fielding', sit: null,
+  cells: [['FLD%','fielding',1], ['E','errors',-1], ['DP','doublePlays',1],
+          ['CS%','caughtStealingPercentage',1]] };
+
+const TEAM_SPECS = [SPEC_BATTING, SPEC_RISP, SPEC_DISC, SPEC_POWER,
+                    SPEC_SP, SPEC_RP, SPEC_STAFF, SPEC_RISP_ARM, SPEC_DEF];
+
+// Over a custom window every sitCode is unavailable — the API accepts sitCodes alongside
+// byDateRange and then ignores them, handing back the undifferentiated line. Verified twice: the
+// starter/reliever split, and again for RISP, where a window with `sitCodes=risp` and the same
+// window without it came back byte-identical (585 AB, .255, .739 both ways). Rather than label
+// whole-team numbers "WITH RISP" or "STARTING PITCHING", those cards drop out and the honest
+// whole-staff card takes their place.
+//
+// What a window IS good for: set both date boxes to the same day and every card becomes that
+// single game — a club's strikeouts, ERA and slash line for one night.
+const TEAM_SPECS_RANGE = [SPEC_BATTING, SPEC_DISC, SPEC_POWER, SPEC_STAFF, SPEC_DEF];
+// Where each window-unavailable category sends you instead: the pitching ones to the whole staff,
+// the hitting one to team batting. Staying on the same side of the ball matters — dropping someone
+// looking at RISP hitting onto a pitching card reads as the tool losing its place.
+const RANGE_FALLBACK = { sp: 'staff', rp: 'staff', risparm: 'staff', risp: 'batting' };
 const teamSpecs = () => (rangeActive() ? TEAM_SPECS_RANGE : TEAM_SPECS);
 
 const ordinal = n => {
@@ -2555,9 +2619,10 @@ async function fetchTeamGroup(spec, year) {
 
 // Ties share a rank (two clubs at 3.40 ERA are both 4th, next is 6th) — the alternative silently
 // invents an ordering between two identical numbers.
-function rankMap(splits, field, dir) {
+function rankMap(splits, src, dir) {
+  const get = statGet(src);
   const vals = splits
-    .map(sp => ({ id: sp.team && sp.team.id, v: parseFloat(sp.stat[field]) }))
+    .map(sp => ({ id: sp.team && sp.team.id, v: parseFloat(get(sp.stat)) }))
     .filter(x => x.id != null && !Number.isNaN(x.v));
   vals.sort((a, b) => (b.v - a.v) * dir);
   const out = new Map();
@@ -2580,11 +2645,12 @@ async function buildTeamCardSet(teamId, teamName, year) {
     // not hard-coded to 30: in October only the clubs still playing appear, so "4th of 12" is the
     // honest line and "4th of 30" would be a lie
     const total = splits.filter(sp => sp.team).length || 30;
-    const cells = spec.cells.map(([label, field, dir]) => {
-      const raw = mine.stat[field];
+    const cells = spec.cells.map(([label, src, dir, fmt]) => {
+      const raw = statGet(src)(mine.stat);
       if (raw == null || raw === '') return null;
-      const rank = rankMap(splits, field, dir).get(+teamId);
-      return [label, String(raw), rank ? `${ordinal(rank)} of ${total}` : ''];
+      if (typeof raw === 'number' && !Number.isFinite(raw)) return null;   // 0/0 on a derived rate
+      const rank = rankMap(splits, src, dir).get(+teamId);
+      return [label, fmt ? fmt(raw) : String(raw), rank ? `${ordinal(rank)} of ${total}` : ''];
     }).filter(Boolean);
     if (!cells.length) return;
     // The crest identifies the club, so the headline is the category — it's the thing that changes
@@ -2994,8 +3060,12 @@ function applyRange() {
     paintTfPills(); loadModalStats();
   }
   if (!$('teamModalBackdrop').hidden && teamModalId) {
-    if (rangeActive() && (teamSpecKey === 'sp' || teamSpecKey === 'rp')) teamSpecKey = 'staff';
-    else if (!rangeActive() && teamSpecKey === 'staff') teamSpecKey = 'batting';
+    // Which categories exist depends on the window, because no sitCode survives byDateRange. A
+    // selected pill that no longer exists falls back to its closest whole-team equivalent — same
+    // side of the ball — rather than leaving the card blank or silently jumping to batting.
+    if (!teamSpecs().some(sp => sp.key === teamSpecKey)) {
+      teamSpecKey = RANGE_FALLBACK[teamSpecKey] || teamSpecs()[0].key;
+    }
     guard(openTeamModal)(teamModalId, teamSpecKey);
   }
 }

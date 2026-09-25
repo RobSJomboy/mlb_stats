@@ -306,9 +306,9 @@ The rest of the bar is unaffected.
 ## Size
 
 **Graphic size %** in the top controls, default **33**. It scales the whole stat bar — box, crest,
-name, numbers, ranks — as one piece, anchored bottom-left, so the left edge and the height off the
-floor stay where they were and only the footprint changes. At 33 the bar is 594x83 in a 1920x1080
-frame instead of 1800x250.
+name, numbers, ranks — as one piece, **anchored bottom-centre**, so it stays centred in the frame at
+any size and only the footprint changes. At 33 the bar is 594x83 in a 1920x1080 frame instead of
+1800x250, sitting 663px from either edge.
 
 It's a single transform rather than every dimension being re-specified, which means the proportions
 stay exactly as drawn and `sizeCells()` goes on measuring the unscaled layout width — the stat
@@ -327,6 +327,50 @@ input doesn't fire until the field is committed with a blur or Enter — so typi
 watching the screen did nothing, which reads exactly as "the size box isn't working". While a field
 still has focus a half-typed value that's out of range is ignored rather than clamped, so "3" on the
 way to "33" doesn't snap the graphic to the minimum first.
+
+---
+
+## Team categories
+
+Nine, cycling in this order. Every number carries the club's rank, computed here across all 30
+clubs rather than trusted to a `sortStat` parameter.
+
+| Card | What's on it |
+|---|---|
+| **Team Batting** | AVG · OBP · SLG · OPS · R · HR |
+| **With RISP** | AVG · OPS · HR · RBI · K% · BB% |
+| **Plate Discipline** | K% · BB% · BB/K · SO · BB · GIDP |
+| **Power & Speed** | HR · ISO · SLG · AB/HR · SB · SB% |
+| **Starting Pitching** | ERA · WHIP · K · BAA · IP |
+| **Relief Pitching** | ERA · WHIP · SV · K · BAA |
+| **Pitching Staff** | ERA · WHIP · K · K/9 · K/BB · BAA |
+| **Opponents w/ RISP** | BAA · OPS · K · K/9 · WHIP · HR |
+| **Team Defense** | FLD% · E · DP · CS% |
+
+**K%, BB%, BB/K and ISO are computed here** — the API only hands back the raw counts. A cell's
+source can be a function of the stat line rather than a field name, and the ranking runs on whatever
+it returns, so a derived stat is ranked across all 30 clubs exactly like a native one. All four were
+checked against an independent recomputation, as was the sort direction of every
+lower-is-better stat: get `dir` wrong and you get a confident, silent "1st of 30".
+
+**No LOB on the RISP card, deliberately.** Left-on-base with runners in scoring position has no
+agreed direction — a low number can mean a club cashes its runners in, or that it never gets any on.
+Ranked, it produced a confident "3rd of 30" for a team sitting 19th in RISP average.
+
+### One game's numbers
+
+Set **both** date boxes to the same day and every card becomes that single game. Sept 22 for the
+Yankees returns 14 strikeouts, 3.00 ERA, 0.89 WHIP, ranked against the 28 clubs that played — and
+14 is right: it's a doubleheader, 8 in one and 6 in the other.
+
+**The split cards drop out over a window.** The API accepts `sitCodes` alongside `byDateRange` and
+then ignores them. Verified twice — once for starter/reliever, and again for RISP, where the same
+window with and without `sitCodes=risp` came back byte-identical (585 AB, .255, .739 both ways).
+Rather than label whole-team numbers "WITH RISP", those four cards disappear and a pill that no
+longer exists falls back to its whole-team equivalent on the same side of the ball.
+
+`cl` (close & late) is **not** supported on this endpoint — it returns zero splits, so there is no
+late-innings card.
 
 ---
 
