@@ -46,6 +46,7 @@ network call, the index is loaded up front.
 | Pill | What it pulls |
 |---|---|
 | Full Season | season totals |
+| Career | career totals, ignoring the Season dropdown and any date window |
 | Last 7 / 14 / 30 Days | rolling date range ending today |
 | Vs Lefties | vs LHP for a hitter, vs LHB for a pitcher |
 | Vs Righties | vs RHP for a hitter, vs RHB for a pitcher |
@@ -300,6 +301,23 @@ line on air, so what you saved is what's up.
 
 If the graphic saves without a headshot, MLB's image host declined the cross-origin read that day.
 The rest of the bar is unaffected.
+
+---
+
+## Career
+
+**Career** sits next to **Full Season** in the player card, so the two toggle against each other —
+and both go into the split cycle, so a rotation runs season, career, then the recent windows.
+
+It ignores the Season dropdown and any date range, because career is career. **Stat set still
+applies**: on Postseason it returns the career *playoff* line and the card reads `CAREER
+POSTSEASON`. Gerrit Cole comes back 11-7, 2.73, 161 K over 138.1 postseason innings.
+
+The hitting card is laid out for a career rather than a season — games and hits are the milestone
+numbers, so they take the headline (`1211 G · 1262 H`) and SB replaces K%, which nobody has ever
+quoted as a career figure. The slash line stays put so Career and Full Season can be cycled
+straight against each other. The pitching card needs no variant: W-L, ERA, WHIP, IP, K, BB is
+already how a career is quoted.
 
 ---
 

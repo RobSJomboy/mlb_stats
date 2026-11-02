@@ -1097,6 +1097,7 @@ const isPost = () => GT === 'P';
 
 const TF = [
   ['season', 'FULL SEASON'],
+  ['career', 'CAREER'],
   ['pace', 'ON PACE (HEALTHY)'],
   ['paceAsIs', 'ON PACE (AS-IS)'],
   ['7', 'LAST 7 DAYS'],
@@ -1298,6 +1299,7 @@ function tfLabel(tf, year, group) {
   if (tf === 'pace') return 'ON PACE';
   if (tf === 'paceAsIs') return 'ON PACE \u00b7 AS-IS';
   if (tf === 'range') return rangeLabel();
+  if (tf === 'career') return isPost() ? 'CAREER POSTSEASON' : 'CAREER';
   if (tf === 'season') return isPost() ? `${year} POSTSEASON` : `${year} SEASON`;
   if (tf === 'vl') return group === 'pitching' ? 'VS LHB' : 'VS LHP';
   if (tf === 'vr') return group === 'pitching' ? 'VS RHB' : 'VS RHP';
@@ -1338,6 +1340,10 @@ async function fetchStat(pid, group, tf, year) {
   let url;
   if (tf === 'season') {
     url = `${API}/people/${pid}/stats?stats=season&season=${year}&group=${group}`;
+  } else if (tf === 'career') {
+    // No season on this one, deliberately: career is career, and it ignores the Season dropdown
+    // and any date window. gameType still applies, so Postseason gives the career playoff line.
+    url = `${API}/people/${pid}/stats?stats=career&group=${group}`;
   } else if (isSplitTf(tf)) {
     url = `${API}/people/${pid}/stats?stats=statSplits&sitCodes=${tf}&season=${year}&group=${group}`;
   } else if (tf === 'range') {
@@ -1420,6 +1426,18 @@ function battingGraphicData(st, label) {
                  ['K%', kPct(st.strikeOuts, st.plateAppearances)]];
   return { label, hitLine: `${st.hits}-for-${st.atBats}`, cells };
 }
+// A career line is read differently from a season one: games played and hits are the milestone
+// numbers, and nobody has ever quoted a career strikeout rate. The slash line stays so CAREER and
+// FULL SEASON can be cycled straight against each other.
+function careerBattingData(st, label) {
+  if (!st) return null;
+  return { label, hitLine: `${st.gamesPlayed || 0} G \u00b7 ${st.hits} H`, cells: [
+    ['AVG', st.avg], ['OBP', st.obp], ['SLG', st.slg], ['OPS', st.ops],
+    ['HR', st.homeRuns], ['RBI', st.rbi], ['SB', st.stolenBases] ] };
+}
+
+// The career pitching line needs no variant — W-L, ERA, WHIP, IP, K, BB is already exactly how a
+// career is quoted.
 function pitchingGraphicData(st, label) {
   if (!st) return null;
   if (st.__pace) return pacePitching(st);
@@ -1848,7 +1866,8 @@ function playerCard(row, pid, bat, pit, tf, year) {
     const d = pitFn(pit, tfLabel(tf, year, 'pitching'));
     return d ? cardFromData('player', pid, row.name, sub, d) : null;
   }
-  const b = battingGraphicData(bat, tfLabel(tf, year, 'hitting'));
+  const batFn = tf === 'career' ? careerBattingData : battingGraphicData;
+  const b = batFn(bat, tfLabel(tf, year, 'hitting'));
   const d = b || pitFn(pit, tfLabel(tf, year, 'pitching'));
   return d ? cardFromData('player', pid, row.name, sub, d) : null;
 }
@@ -2480,7 +2499,8 @@ async function downloadGraphic(kind) {  // kind: 'bat' | 'pit'
   if (!row) return;
   const year = $('season').value;
   const pitFn = isSplitTf(modalTf) ? pitchingSplitGraphicData : pitchingGraphicData;
-  const data = kind === 'bat' ? battingGraphicData(modalBat, tfLabel(modalTf, year, 'hitting'))
+  const batFn = modalTf === 'career' ? careerBattingData : battingGraphicData;
+  const data = kind === 'bat' ? batFn(modalBat, tfLabel(modalTf, year, 'hitting'))
                                : pitFn(modalPit, tfLabel(modalTf, year, 'pitching'));
   if (!data) { note.textContent = `No ${kind === 'bat' ? 'hitting' : 'pitching'} stats available to build a graphic yet.`; return; }
 
